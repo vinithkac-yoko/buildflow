@@ -1,0 +1,10 @@
+{
+  "extends": ["next/core-web-vitals", "next/typescript"],
+  "ignorePatterns": [".claude/**", "node_modules/**", ".next/**"],
+  "overrides": [
+    {
+      "files": ["src/core/**/*.ts"],
+      "rules": { "@typescript-eslint/no-explicit-any": "error" }
+    }
+  ]
+}

@@ -1,0 +1,64 @@
+/*
+ * BUILDFlow theme tokens — the ONLY place colours are defined.
+ * Values follow docs/UX_RESEARCH.md §2.1. Swap the client's exact brand hex
+ * codes here and nowhere else. Channels are space-separated RGB so Tailwind
+ * can apply alpha (rgb(var(--x) / <alpha-value>)).
+ */
+
+:root {
+  /* Brand anchors (dark-theme surfaces derive from these) */
+  --brand-navy: 11 31 58;        /* #0B1F3A */
+  --brand-navy-deep: 6 18 31;    /* #06121F */
+  --brand-green: 34 197 94;      /* #22C55E */
+  --steel: 125 162 214;          /* #7DA2D6 */
+}
+
+/* Light theme (default token set; Site Engineer default) */
+:root,
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: 255 255 255;             /* #FFFFFF */
+  --surface: 244 246 250;        /* #F4F6FA */
+  --surface-2: 233 237 244;      /* #E9EDF4 */
+  --border: #d5dce6;
+  --text: 11 31 58;              /* #0B1F3A 16.5:1 */
+  --text-muted: 71 85 105;       /* #475569 */
+  --brand: 21 128 61;            /* #15803D fills */
+  --on-brand: 255 255 255;       /* 5.0:1 */
+  --brand-text: 22 101 52;       /* #166534 7.1:1 */
+  --planned: 30 58 138;          /* #1E3A8A 10.4:1 */
+  --warn: 180 83 9;              /* #B45309 */
+  --danger: 185 28 28;           /* #B91C1C */
+  --slate: 71 85 105;
+  --glow: 0 0 0 / 0;
+  --grid-opacity: 0;
+  --float-bg: 255 255 255 / 0.86;
+}
+
+/* Dark theme (office default) */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: 6 18 31;                 /* #06121F */
+  --surface: 11 31 58;           /* #0B1F3A */
+  --surface-2: 18 41 74;         /* #12294A */
+  --border: rgba(255, 255, 255, 0.08);
+  --text: 241 245 249;           /* #F1F5F9 */
+  --text-muted: 148 163 184;     /* #94A3B8 6.4:1 */
+  --brand: 34 197 94;            /* #22C55E */
+  --on-brand: 6 18 31;           /* 8.3:1 */
+  --brand-text: 34 197 94;       /* 7.3:1 on navy */
+  --planned: 125 162 214;        /* #7DA2D6 6.3:1 */
+  --warn: 245 165 36;            /* #F5A524 */
+  --danger: 240 82 79;           /* #F0524F */
+  --slate: 148 163 184;
+  --glow: 125 162 214 / 0.06;
+  --grid-opacity: 0.03;
+  --float-bg: 11 31 58 / 0.78;
+}
+
+/* Sunlight mode: extra-bold text + maximum contrast for engineer screens */
+:root[data-sunlight="on"][data-theme="light"] {
+  --text: 6 18 31;
+  --text-muted: 51 65 85;
+  --border: #b7c2d3;
+}

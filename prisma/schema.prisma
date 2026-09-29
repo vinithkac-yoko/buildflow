@@ -1,0 +1,165 @@
+// BUILDFlow — single source of truth for the data model.
+// Milestone 1 covers identity & access plus the minimal Client/Project spine.
+// Later milestones extend this file (never a second schema).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  OWNER
+  MARKETING
+  PROJECT_MANAGER
+  SITE_ENGINEER
+  ACCOUNTS
+  PROCUREMENT
+  QUALITY_ENGINEER
+  HR
+  STORE_KEEPER
+  ADMIN
+  CLIENT
+}
+
+enum ThemePreference {
+  DARK
+  LIGHT
+}
+
+enum ClientStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum ProjectStatus {
+  PLANNING
+  ACTIVE
+  ON_HOLD
+  DELAYED
+  COMPLETED
+  CANCELLED
+}
+
+// ─── Identity & access ────────────────────────────────────────────────
+
+model User {
+  id              String          @id @default(cuid())
+  email           String          @unique
+  name            String
+  passwordHash    String
+  role            Role
+  isActive        Boolean         @default(true)
+  themePreference ThemePreference?
+  // Only set for role = CLIENT: the client whose projects this login may read.
+  clientId        String?
+  client          Client?         @relation("ClientLogins", fields: [clientId], references: [id])
+  isDemo          Boolean         @default(false)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  createdById     String?
+
+  sessions        Session[]
+  assignments     ProjectAssignment[]
+  auditLogs       AuditLog[]
+  managedProjects Project[]       @relation("ProjectCreator")
+  createdClients  Client[]        @relation("ClientCreator")
+
+  @@index([role])
+}
+
+// Server-side session row so that sessions can be revoked (logout deletes it).
+model Session {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt  DateTime
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model ProjectAssignment {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String?
+  isDemo      Boolean  @default(false)
+
+  @@unique([userId, projectId])
+  @@index([projectId])
+}
+
+// Every mutating service writes one of these in the same DB transaction.
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  projectId  String?
+  activityId String?
+  action     String
+  entity     String
+  entityId   String?
+  before     Json?
+  after      Json?
+  createdAt  DateTime @default(now())
+
+  @@index([projectId, createdAt])
+  @@index([userId, createdAt])
+  @@index([entity, entityId])
+  @@index([createdAt])
+}
+
+// ─── Client & Project spine ───────────────────────────────────────────
+
+model Client {
+  id           String       @id @default(cuid())
+  code         String       @unique
+  name         String
+  contact      String?
+  paymentTerms String?
+  status       ClientStatus @default(ACTIVE)
+  isDemo       Boolean      @default(false)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  createdById  String?
+  createdBy    User?        @relation("ClientCreator", fields: [createdById], references: [id])
+
+  projects     Project[]
+  logins       User[]       @relation("ClientLogins")
+}
+
+model Project {
+  id             String        @id @default(cuid())
+  code           String        @unique
+  clientId       String
+  client         Client        @relation(fields: [clientId], references: [id])
+  name           String
+  type           String        @default("Residential villa")
+  location       String
+  contractValue  Decimal       @db.Decimal(16, 2)
+  baselineStart  DateTime      @db.Date
+  baselineFinish DateTime      @db.Date
+  currentFinish  DateTime      @db.Date
+  status         ProjectStatus @default(PLANNING)
+  healthScore    Int?
+  isDemo         Boolean       @default(false)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  createdById    String?
+  createdBy      User?         @relation("ProjectCreator", fields: [createdById], references: [id])
+
+  assignments    ProjectAssignment[]
+
+  @@index([clientId])
+  @@index([status])
+}
