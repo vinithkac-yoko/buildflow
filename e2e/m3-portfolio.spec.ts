@@ -28,7 +28,8 @@ test.describe("Portfolio progress (rough cut, polished in milestone 7)", () => {
     await page.getByRole("link", { name: "Worst first" }).click();
     await expect(page.locator("article").first()).toContainText("Avinashi Road"); // the clearly-behind site leads
     await page.getByRole("link", { name: "All", exact: true }).click();
-    await expect(page.locator("article")).toHaveCount(9);
+    // The 9 demo projects, plus any the m2 spec created earlier in this run.
+    await expect.poll(() => page.locator("article").count()).toBeGreaterThanOrEqual(9);
   });
 
   test("drilling into a project shows progress by stage and the S-curve, and a table alternative", async ({ page }) => {
