@@ -45,8 +45,9 @@ test.describe("Milestone 1 — sign-in, roles, project access", () => {
 
   test("client sees own project without internal costs", async ({ page }) => {
     await login(page, "client@buildflow.demo");
-    await expect(page).toHaveURL(/\/projects/);
-    await expect(page.getByRole("heading", { level: 2 })).toHaveCount(1);
+    await expect(page).toHaveURL(/\/projects\/[a-z0-9]+$/); // a homeowner with one project lands on it
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("RS Puram");
+    await expect(page.locator("main")).not.toContainText("₹"); // no contract value or costs on the client's page
   });
 
   test("audit log is Owner/Admin only", async ({ page }) => {
