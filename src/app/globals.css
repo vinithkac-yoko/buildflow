@@ -1,0 +1,91 @@
+@import "@fontsource/fira-sans/300.css";
+@import "@fontsource/fira-sans/400.css";
+@import "@fontsource/fira-sans/500.css";
+@import "@fontsource/fira-sans/600.css";
+@import "@fontsource/fira-sans/700.css";
+@import "@fontsource/fira-code/400.css";
+@import "@fontsource/fira-code/500.css";
+@import "../styles/theme.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    background: rgb(var(--bg));
+    color: rgb(var(--text));
+    font-family: theme("fontFamily.sans");
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    min-height: 100dvh;
+    font-size: 16px;
+    line-height: 1.5;
+    background: rgb(var(--bg));
+  }
+  :root[data-theme="dark"] body {
+    background:
+      linear-gradient(180deg, rgb(var(--brand-navy)) 0%, rgb(var(--brand-navy-deep)) 420px),
+      rgb(var(--bg));
+  }
+  /* faint blueprint grid — dark theme only, ~3% opacity */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    opacity: var(--grid-opacity);
+    background-image:
+      linear-gradient(rgb(var(--steel)) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(var(--steel)) 1px, transparent 1px);
+    background-size: 32px 32px;
+    z-index: 0;
+  }
+  :root[data-sunlight="on"] body { font-weight: 500; }
+  :root[data-sunlight="on"] h1,
+  :root[data-sunlight="on"] h2,
+  :root[data-sunlight="on"] h3 { font-weight: 700; }
+  h1, h2, h3 { font-weight: 600; letter-spacing: -0.01em; }
+  :focus-visible {
+    outline: 2px solid rgb(var(--brand-text));
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+  .num { font-variant-numeric: tabular-nums; }
+  .code { font-family: theme("fontFamily.mono"); font-variant-numeric: tabular-nums; }
+}
+
+/* cross-fade when the theme toggles (class is added for ~250ms) */
+.theme-fade,
+.theme-fade *,
+.theme-fade *::before,
+.theme-fade *::after {
+  transition: background-color 200ms ease-out, color 200ms ease-out, border-color 200ms ease-out !important;
+}
+
+@layer components {
+  .panel {
+    background: rgb(var(--surface));
+    border: 1px solid var(--border);
+    border-radius: theme("borderRadius.xl");
+  }
+  :root[data-theme="dark"] .panel {
+    box-shadow: inset 0 1px 0 rgb(var(--glow)), 0 1px 2px rgb(0 0 0 / 0.25);
+  }
+  /* glass is for floating layers only: nav bars, sheets, dialogs */
+  .glass {
+    background: rgb(var(--float-bg));
+    backdrop-filter: blur(14px) saturate(1.2);
+    -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

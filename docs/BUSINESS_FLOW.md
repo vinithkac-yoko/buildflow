@@ -1,0 +1,325 @@
+# BUILDFlow — Business flow (plain English)
+
+This file describes what each module does, who can do what, and which rules always hold.
+It is kept in step with the code and is the context a future AI agent will read.
+Sections are added as each milestone ships.
+
+---
+
+## 1. Identity and access  *(milestone 1)*
+
+**What it is.** Everyone signs in with an email and password. Each person has exactly one role.
+
+**Roles.** Owner, Marketing, Project Manager, Site Engineer, Accounts, Procurement, Quality Engineer, HR, Store Keeper, Admin, Client.
+
+**Sessions.** Signing in creates a session that lasts 7 days. Signing out deletes it, so the login stops working straight away. A disabled user is signed out on their next click.
+
+**Which projects a person can see.**
+
+| Role | Projects |
+|---|---|
+| Owner, Admin, Accounts, Procurement, HR | All |
+| Project Manager, Site Engineer, Store Keeper, Quality Engineer | Only those they are assigned to (Project Assignment) |
+| Client | Only projects that belong to their client record |
+| Marketing | None (Clients module only) |
+
+**What each role may do.** The single permission table is `src/core/auth/permissions.ts`. Every service checks it before doing anything, so a screen, an API call or a future agent all get the same answer. Summary:
+
+| Role | Main powers |
+|---|---|
+| Owner | Everything |
+| Admin | Users, roles, assignments, masters. No cost data. |
+| Project Manager | Plan WBS, activities and BOQ; approve DPRs; raise purchase requests; issues and delays — on assigned projects |
+| Site Engineer | Daily report, labour, material use, photos, issues, material requests, raise inspections — on assigned projects. No money anywhere. |
+| Accounts | Vendor invoices and payments, subcontractor bills, payables and receivables views |
+| Procurement | Purchase request → quotation → PO, vendors, receipts. Sees PO rates only. |
+| Store Keeper | Receipts, issues, returns, transfers, stock counts |
+| Quality Engineer | Checklists, inspections, NCR lifecycle |
+| HR | Employees and contract labour gangs. Sees wages only. |
+| Marketing | Clients |
+| Client | Read-only: approved DPRs, shared photos, released documents, progress |
+
+**Cost data is hidden at the source.** Internal budget rates, planned cost, labour cost, material cost and valuation, PO rates, margin and wages are removed from what a service returns to any role not allowed to see them (`redact()`), so they never reach the browser or the network. Project Managers see costs only on their own projects. Clients see contract value and the client rate, never internal figures.
+
+**Audit trail.** Every change writes an audit row in the same database transaction: who, which project, which activity (if any), what action, which record, before and after values, when. Owner and Admin can browse it (Settings → Audit log) and filter by project, user, entity and date. Admin never sees cost fields inside the before/after values.
+
+**Rules that always hold**
+- A service never trusts the screen: it re-checks role and project assignment itself.
+- Signing in is rate-limited.
+- Passwords are stored only as bcrypt hashes.
+
+---
+
+## 2. Clients and projects  *(milestone 1 data model; create/edit screens in milestone 2)*
+
+**Entities.** A Client can have many Projects. A Project has a code (PRJ-0001), a client, a type, a location, a contract value, baseline start and finish, a current finish, a status and a health score.
+
+**Project status.** Allowed transitions (enforced in the service when project editing arrives in milestone 2):
+
+| From | To |
+|---|---|
+| PLANNING | ACTIVE, CANCELLED |
+| ACTIVE | ON_HOLD, DELAYED, COMPLETED, CANCELLED |
+| ON_HOLD | ACTIVE, CANCELLED |
+| DELAYED | ACTIVE, ON_HOLD, COMPLETED, CANCELLED |
+| COMPLETED, CANCELLED | (final) |
+
+**Assignments.** A user can be assigned to many projects and a project can have many users. Assignments decide project visibility for Project Managers, Site Engineers, Store Keepers and Quality Engineers.
+
+**Who can do what.** Owner: everything. Admin: create and edit clients and projects and manage assignments. Marketing: clients only. Project Manager: update assigned projects. Everyone else with project access: read.
+
+**Every project record stores** who created it and when. Every project transaction will carry the project, the user and the time (and the activity where relevant).
+
+---
+
+## 3. Masters  *(milestone 2)*
+
+**What they are.** Company-wide reference lists. Every dropdown in the app picks from these, so people never type free text where a master exists.
+
+| List | Who manages it | Notes |
+|---|---|---|
+| Clients | Marketing, Admin, Owner | One client can have many projects |
+| Units of measure, cost codes, trades | Admin, Owner | Codes are typed once and reused |
+| Material categories, materials | Procurement, Admin, Owner | Materials carry a unit, a standard unit cost (cost data) and a reorder threshold |
+| Vendors | Procurement, Admin, Owner | Category from a fixed list; four 1–5 ratings: quality, delivery, price, service |
+| Subcontractors | Admin, Owner (others read) | Each has one trade |
+| Equipment | Admin, Owner | Ownership is Company, Rental or Subcontractor |
+| Employees, contract labour gangs | HR, Owner | Wage and rate columns are cost data |
+| Quality checklists | Quality Engineer, Admin, Owner | One checkpoint per line |
+| SOPs | Admin, Owner | Reference notes |
+
+**Rules.** Codes (MAT-0001, VEN-0001 …) are generated. A record with the same code or name as an existing one is refused with a message. Nothing is deleted; set a record to Inactive instead. Cost columns are removed for roles that may not see them, and a role that can't see a cost column can't overwrite it by editing the record.
+
+---
+
+## 4. Users and assignments  *(milestone 2)*
+
+- **Users** (Admin, Owner): create a person with a role and a temporary password, change their role, disable them (they are signed out everywhere), reset their password. Only the Owner can create or change Owner accounts. You cannot disable yourself or the last Owner. A Client login must be linked to one client.
+- **Assignments** (Admin, Owner): a person is assigned to a project to see it. Only Project Managers, Site Engineers, Store Keepers and Quality Engineers use assignments; other roles see projects by role. Assigning twice is refused. Removing someone takes the project away from them on their next click.
+
+---
+
+## 5. Projects, WBS, activities, BOQ  *(milestone 2)*
+
+**Project.** Created by the Owner in Planning status with a Main Store. Status moves along the map in section 2. Owner, Admin and the assigned PM edit its details; the contract value is editable only by roles that can see it.
+
+**WBS.** A tree per project. Top-level items are stages (Foundation, Superstructure …); activities attach to the lowest level. An item can be deleted only when it has no children and no activities.
+
+**Activity.** Belongs to a project and a WBS item. Fields: name, trade, unit, cost code, planned quantity, planned start and finish, planned labour mandays, planned cost, target productivity, critical-path flag, status. Finish cannot be before start. Planned cost is cost data.
+
+| Activity status | Can move to |
+|---|---|
+| NOT_STARTED | IN_PROGRESS, HALTED |
+| IN_PROGRESS | HALTED, COMPLETED |
+| HALTED | IN_PROGRESS |
+| COMPLETED | IN_PROGRESS (reopen) |
+
+Once daily reports arrive (milestone 3), approval will move activities along this map automatically.
+
+**BOQ.** Items have a code, description, unit, original quantity, approved variation quantity, client rate and internal budget rate. Both rates are cost data (the client rate is also visible to the Client). "Save as revision" freezes the current BOQ as revision 1, 2, 3 …. An activity can link to several BOQ items and a BOQ item to several activities.
+
+**Material BOM.** Per activity: each material with a coefficient (quantity per unit of activity quantity) and an allowable wastage %. Milestone 3/4 use it to compare actual use against standard.
+
+**Storage locations.** Per project (Main Store, Yard, Floor Store, Warehouse, Other). Stock is always held in a location.
+
+**Who can do what.** Owner: everything. PM: WBS, activities, BOQ and BOM on assigned projects. Site Engineer and Store Keeper: read the plan, with no cost columns and no BOQ. Admin: read only, no cost columns. Client and others: no access to planning.
+
+---
+
+## 6. Demo data  *(milestone 2)*
+
+Everything the seed creates is flagged DEMO and shows a DEMO badge. While the app runs in demo mode, records people create are flagged too. The Owner's **Settings → Reset demo data** button (demo mode only) deletes every DEMO record and recreates the starting data in one step; everyone is signed out and demo accounts keep the password `demo1234`.
+
+---
+
+## 7. Daily progress report (DPR)  *(milestone 3)*
+
+**One report per project per day** (the database refuses a second). The Site Engineer opens it on a phone; several engineers on a project add to the same report while it is a draft.
+
+**What goes in it.**
+- Weather (Sunny, Cloudy, Rain, Heavy rain), and an optional "No work today" with a reason.
+- **Work done:** for each activity, today's quantity and its labour — trade, number of people, hours (up to 16), and source (Company, Contract, Piece rate, Subcontractor — the subcontractor is named).
+- **Material used:** material, quantity, and the activity it was used on. The screen shows what is in stock.
+- **Photos:** taken on the phone, shrunk to about 300 KB, each with its own upload state.
+- **Issues:** quick add; saved straight away.
+- Remarks.
+
+The screen starts filled from yesterday (yesterday's activities and crews), saves as you type, and submits with one big button.
+
+**Life-cycle.**
+
+| From | To | Who |
+|---|---|---|
+| (new) | DRAFT | any engineer on the project, by opening today's report |
+| DRAFT | SUBMITTED | the engineer; the first submit locks it for everyone else |
+| SUBMITTED | APPROVED | the PM of the project, or the Owner |
+| SUBMITTED | REJECTED | the PM, with a reason the engineer sees |
+| REJECTED | DRAFT | the engineer, by editing; then submit again |
+
+**Checks before a report is accepted.** An activity can't be reported beyond 110% of its planned quantity in total (the message says what is left). Labour hours must be more than 0 and at most 16. Subcontractor labour needs a subcontractor. A material must name an activity. To submit: weather, and either a quantity or "No work today" with a reason.
+
+**What approval does — all in one step, or not at all.**
+1. The report is claimed so it can't be counted twice.
+2. Each activity gets the quantity added. NOT_STARTED becomes IN_PROGRESS on its first quantity; it becomes COMPLETED when the total reaches the plan. A halted activity blocks approval until it is resumed.
+3. Labour mandays (people × hours ÷ 8) are added to the activity.
+4. Material is issued from project stock (Main Store first, then other locations) as ACTIVITY_ISSUE ledger entries. If any material is short, approval is stopped and the message lists every shortage; nothing is changed.
+5. An audit row records who approved what.
+
+**Who sees what.** Engineers see only today's report (no history) and no money. PMs and the Owner see every report for their projects, with labour cost. Clients see approved reports only, and only photos the PM has chosen to share.
+
+---
+
+## 8. Stock  *(ledger core in milestone 3; receipts and procurement in milestone 4)*
+
+Stock is held per project, per storage location, per material. Every change is a line in an **append-only ledger**; the running balance is updated in the same transaction. Types that add stock: OPENING_STOCK, PO_RECEIPT, TRANSFER_IN, ACTIVITY_RETURN. Types that remove it: TRANSFER_OUT, ACTIVITY_ISSUE, WASTAGE, THEFT_LOSS. Valuation is a moving weighted average.
+
+**Rules the database enforces:** a balance can never go below zero; ledger lines can't be edited or deleted; quantities are always positive; labour hours stay within 0–16.
+
+**Screens.** "Stock" (Materials for site roles) shows each material's total, where it sits, and a low-stock flag when it is at or below its reorder threshold. Cost columns are shown only to roles that may see them.
+
+---
+
+## 9. Progress, days ahead/behind and health  *(milestone 3, polished in milestone 7)*
+
+- **Actual %** = each activity's approved quantity ÷ planned quantity (capped at 100%), weighted by planned cost — or planned mandays if cost is unavailable, or equally if neither exists.
+- **Plan %** = where the plan says the work should be today, interpolating each activity between its planned start and finish.
+- **Days ahead/behind** = the date the plan reached today's actual %, compared with today.
+- **Band:** Ahead (3+ points over plan), On track, Slightly behind (3–8 points under), Behind (8+ points under).
+- **Health score (0–100):** schedule 50 (loses 2 points per point behind) + NCRs 20 + open critical issues 15 (10 lost per issue) + reports filed in the last 7 days 15.
+- **Needs attention** lists activities that are 15+ points behind (critical-path first), reports waiting for approval, projects with no approved report for more than a day, serious open issues, and low stock.
+
+The portfolio screen is for the Owner and PMs. It is grouped by PM by default, shows a "last updated" strip, and drills into each project's stage-by-stage progress and S-curve.
+
+---
+
+## 10. Issues  *(raised in milestone 3; delays and richer handling in milestone 6)*
+
+An issue has a title, severity (Low, Medium, High, Critical), an optional activity, and moves OPEN → IN_PROGRESS → RESOLVED → CLOSED (and can be reopened). Engineers raise them from the daily report; PMs and the Owner change their status. Critical and High open issues appear in "needs attention".
+
+---
+
+## 11. Material request to purchase order  *(milestone 4 — Flow B)*
+
+**Who does what.**
+
+| Step | Who | Result |
+|---|---|---|
+| Material request | Site Engineer (phone) | Lists materials and quantities for their project, with a "needed by" date. No prices. |
+| Convert or send back | Project Manager of that project (or Owner) | "Send to purchase" creates a **purchase request** (PR-…); "Send back" needs a reason. The request can be converted once only. |
+| Quotations | Procurement | Adds a quotation from each vendor: a rate and GST % for every material, delivery days, terms. One quotation per vendor. |
+| Choose | Procurement | Allowed only when **2 or more** quotations exist. Totals are compared with the lowest marked. |
+| Purchase order | Procurement | "Raise purchase order" copies lines, rates and GST from the chosen quotation. Code `PO-<year>-0001`. |
+
+**Cancelling.** A PO can be cancelled only while nothing has been received or invoiced; the purchase request then reopens.
+
+**Statuses.** Request: Waiting for PM → Sent to purchase (or Not approved / Cancelled). Purchase request: Getting quotations → Ordered. PO: Issued → Part received → Received (or Cancelled).
+
+## 12. Receipts and stock operations  *(milestone 4)*
+
+- **Receipt (GRN).** The Store Keeper opens a PO waiting for delivery, picks the storage location, types what actually arrived and (optionally) the challan number. A line can never receive more than is still due. Stock is posted as PO_RECEIPT at the PO rate; the PO becomes Part received or Received.
+- **Issue.** Material goes to a named activity from the chosen location, or from the Main Store first. More than the project holds is refused with the quantity in stock.
+- **Return.** Unused material goes back into a location (optionally naming the activity it came from).
+- **Transfer.** Between locations or projects; two ledger rows written together.
+- **Count adjustment.** Wastage, missing/theft, or extra found — always with a short note. Every change is a ledger line; the ledger is append-only.
+- Site engineers and clients cannot issue, return, transfer or adjust stock.
+
+## 13. Vendor invoices and payments  *(milestone 4)*
+
+- **Invoice.** Accounts enters the vendor's invoice against a PO after something has been received: number (unique per vendor), date, due date, amount before tax and tax. All invoices on a PO together cannot exceed the PO value.
+- **Payment.** Amount, date, mode (bank transfer, cheque, UPI, cash) and reference. A payment can never exceed what is still owed; the invoice becomes Part paid, then Paid.
+- **Payables screen.** Total still owed, overdue amount and paid so far; unpaid invoices first, overdue ones flagged.
+- **Visibility.** Owner and Accounts (and the PM on assigned projects) see the money side. Procurement sees PO rates only. Store Keeper, Site Engineer and Client never see rates, invoices or payments — they are removed by the service before anything reaches the screen.
+- Billing to clients and Receivables remain placeholders in Phase 1.
+
+---
+
+## 14. Quality: inspections and NCRs  *(milestone 5 — Flow C)*
+
+**Inspection.** A Site Engineer can request one (activity, checklist, note). The Quality Engineer opens it (or starts a new one), marks every checkpoint Pass or Fail (with an optional note on failures) and completes it. The checkpoint wording is copied into the record, so later checklist edits never change history.
+
+| Passed checkpoints | Result |
+|---|---|
+| all | PASS |
+| 80% or more | CONDITIONAL_PASS |
+| below 80% | REJECTED_NCR — an NCR is created automatically |
+
+**NCR.** Carries the project, activity, subcontractor (if any), severity (Minor, Major, Critical), the defect, and the rework labour cost, material cost and time lost.
+
+| Step | Who | What is recorded |
+|---|---|---|
+| Open | (raised by the inspection) | Defect, severity |
+| Corrective action | Quality Engineer | What will be done and by whom |
+| Rectification | Quality Engineer | What was done, time lost (days) |
+| Reinspection | Quality Engineer | Pass closes the NCR; fail sends it back to Rectification |
+| Closed | — | Closure time in hours |
+
+The Owner and the project's PM record the rework labour and material cost (cost data). Everyone else sees no money on an NCR. Each step is written to the NCR's timeline and to the audit log.
+
+**Effects elsewhere.** Open Major NCRs cost 10 health points and Critical NCRs 20, and both appear in the portfolio's needs-attention list.
+
+---
+
+## 15. Issues and delays  *(milestone 6)*
+
+**Issues** can be reported from the daily report or from the Issues screen (title, severity, optional activity, description and a fix-by date). The PM moves them Open → In progress → Resolved → Closed and can set the target date.
+
+**Delays** (PM and Owner) record what held work up: category, what caused it, start and end dates (empty while it is still going on), the activity affected, whether it hits the critical path, cost impact (cost data), evidence, impact, the **responsible function** and the corrective action. Days lost count the first and last day. A delay never names a person.
+
+## 16. Equipment  *(milestone 6)*
+
+The PM (or Owner) assigns a machine to a project and optionally an activity; it can be on one project at a time. Logs record usage hours (at most 24 per machine per day), maintenance and breakdowns (both need a note). Breakdown and maintenance change the machine's status; **Back in service** returns it to the site or to "available". **Release** takes it off the project.
+
+## 17. Documents  *(milestone 6)*
+
+Categories: Agreement, BOQ, Drawings, DPR, Purchase orders, Invoices, Quality, Payment, Handover, Photos. The PM or Owner uploads a file (PDF, DWG, DXF, Excel, Word, picture; up to 25 MB), approves or rejects it (a reason is required), and **releases** it to the client. A new version supersedes the current one: only the latest is current, old versions stay viewable to the team, and the document goes back to "waiting for approval". Clients see only released documents and only their current version; downloads are always checked against project access and status.
+
+## 18. Subcontractor work orders  *(milestone 6)*
+
+| Step | Who | What |
+|---|---|---|
+| Work order | PM | Subcontractor, title, and lines: activity, quantity, rate |
+| Measurement | PM | Work measured on a line; never more than the ordered quantity in total |
+| Bill | Accounts | Covers all measured work not yet billed; gross = quantity × rate, less retention (default 5%) |
+| Payment | Accounts | Amount, date, mode, reference; never more than what is payable |
+
+A work order can be cancelled only before any work is measured. When every line is fully measured it shows as "Fully measured". Rates, bills and payments are cost data: Owner, Accounts and the project's PM see them; nobody else can even open a work order.
+
+---
+
+## 19. Dashboards and the client portal  *(milestone 7 — Flow D)*
+
+**Portfolio (Owner and PMs).** A freshness strip ("Updated from N approved reports today · last update HH:MM"), one sentence on how many live sites are on track, slightly behind or behind, and a bar with one segment per site. **Needs attention** lists exceptions worst first (behind-schedule activities with critical-path first, missing and waiting reports, open Major/Critical NCRs, serious issues, low stock). **Projects** are grouped by PM (with a summary each) or listed worst first, filtered by status and PM. Each site shows planned vs actual, days ahead or behind, a small S-curve, the current finish date (and slip against baseline), the last approved report and its health chip. A PM sees only their own sites.
+
+**Project dashboard.** Header facts, an "Open right now" strip, the progress bar and S-curve (with a table alternative), the health score and its four parts, stage-by-stage bars, module tiles, team and storage locations.
+
+**Client portal.** The homeowner sees how much of their home is complete (approved work only), progress by stage, the expected finish date, the latest approved site updates with the photos the PM shared, and the documents released to them. Nothing internal reaches the browser: no plan comparison, days behind, health, issues, NCRs, delays, costs, remarks, or unshared photos and documents.
+
+---
+
+## 20. Working without a signal  *(milestone 8)*
+
+**Install.** BUILDFlow is an installable web app (manifest, icons, service worker). On a phone, open the site in Chrome, use the menu → *Install app* (or *Add to Home screen*), and it opens full-screen like an app.
+
+**What works offline (Site Engineer).** Open the daily report, fill it in, add photos, report an issue, raise a material request or an inspection request. Everything is kept on the phone. The screens are saved each time the engineer opens the app with a signal, so the app should be opened once on data or wifi before going to a dead-signal site.
+
+**What the engineer sees.** A calm banner: *"You're offline. What you enter is saved on this phone and will send when you're back online."* — then *"Sending 3 items…"* — then *"All sent"*. The daily report shows *"Saved on your phone … will send automatically"*, photos show *On phone* until they are uploaded, and a report submitted offline shows *"Report saved on your phone"*.
+
+**When it is sent.** In the order it was made, one record at a time. Each has an id, so sending twice never creates two. If the server refuses something (for example the day has passed, another person already submitted the report, or a quantity is now too high) the item stays on the phone with the reason and two buttons: *Try again* or *Discard*.
+
+**Good to know.** Signing out clears what is saved on the phone (after a warning if something is unsent). The account menu's *Simulate offline* switch lets you demonstrate this without switching the phone to flight mode.
+
+
+## 21. Ask BUILDFlow (preview)  *(milestone 9)*
+
+**Who.** The Owner and Project Managers. The screen says *"Preview — AI assistant coming in Phase 2"*. There is no artificial intelligence in it yet.
+
+**What it does.** Four questions are offered as buttons. Tapping one shows the answer from your live data, with the time it was read and the name of the read function behind it:
+
+1. **Which activities are behind schedule?** Open activities that should be at least 15 points further along than they are — critical path first, then the worst gap. Each shows planned %, actual %, the due date and links to the activity.
+2. **What's low on stock?** Materials at or below their reorder level, by project, with what is left.
+3. **Open NCRs this week?** Every NCR not yet closed, with severity and stage; those raised in the last 7 days are tagged *New this week*.
+4. **Labour mandays by project this week?** Mandays and worker-days from submitted or approved reports in the last 7 days, largest first.
+
+**What it will not do.** It does not accept typed questions, it never shows money, and a Project Manager only sees their own projects. Site engineers, clients and other roles do not have the screen.
+
+**Phase 2.** The same four functions (in `src/core/tools`) are shaped as agent tools, so an assistant can call them later without new business logic.
