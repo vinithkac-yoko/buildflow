@@ -24,7 +24,7 @@ import type { FieldDef } from "@/lib/forms";
 import { projectFormFields } from "../project-fields";
 
 /** Milestones already shipped: a locked tile below this line is about the role, not about the build. */
-const BUILT_UP_TO = 4;
+const BUILT_UP_TO = 5;
 
 interface Tile { label: string; icon: NavIcon; milestone: number; href?: (id: string, role: string) => string | null }
 const TILES: Tile[] = [
@@ -33,7 +33,7 @@ const TILES: Tile[] = [
   { label: "Labour", icon: "labour", milestone: 3, href: (_id, role) => (["OWNER", "PROJECT_MANAGER", "SITE_ENGINEER"].includes(role) ? "/labour" : null) },
   { label: "Materials", icon: "materials", milestone: 4, href: (id) => `/materials?project=${id}` },
   { label: "Procurement", icon: "procurement", milestone: 4, href: (_id, role) => (["OWNER", "PROJECT_MANAGER", "PROCUREMENT"].includes(role) ? "/procurement" : ["SITE_ENGINEER", "STORE_KEEPER"].includes(role) ? (role === "STORE_KEEPER" ? "/receipts" : "/requests") : null) },
-  { label: "Quality", icon: "quality", milestone: 5 },
+  { label: "Quality", icon: "quality", milestone: 5, href: (id, role) => (["OWNER", "PROJECT_MANAGER", "SITE_ENGINEER", "QUALITY_ENGINEER"].includes(role) ? `/quality?project=${id}` : null) },
   { label: "Issues", icon: "issues", milestone: 6, href: (id) => `/issues?project=${id}` },
   { label: "Payments", icon: "payments", milestone: 4, href: (_id, role) => (["OWNER", "ACCOUNTS"].includes(role) ? "/payables" : null) },
   { label: "Documents", icon: "documents", milestone: 6 },

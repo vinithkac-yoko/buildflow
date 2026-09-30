@@ -76,6 +76,10 @@ model User {
   prRaised        PurchaseRequest[]   @relation("PrRaiser")
   poRaised        PurchaseOrder[]     @relation("PoRaiser")
   grnReceived     MaterialReceipt[]   @relation("GrnReceiver")
+  inspRequested   QualityInspection[] @relation("InspRequester")
+  inspDone        QualityInspection[] @relation("InspInspector")
+  ncrRaised       Ncr[]               @relation("NcrRaiser")
+  ncrActions      NcrAction[]         @relation("NcrActor")
 
   @@index([role])
 }
@@ -183,6 +187,8 @@ model Project {
   receipts         MaterialReceipt[]
   invoices         VendorInvoice[]
   payments         VendorPayment[]
+  inspections      QualityInspection[]
+  ncrs             Ncr[]
 
   @@index([clientId])
   @@index([status])
@@ -284,6 +290,8 @@ model Material {
   ledgerEntries InventoryLedger[]
   stockBalances StockBalance[]
   requestItems  MaterialRequestItem[]
+  inspections   QualityInspection[]
+  ncrs          Ncr[]
   prItems       PurchaseRequestItem[]
   poItems       PurchaseOrderItem[]
   receiptItems  MaterialReceiptItem[]
@@ -383,7 +391,9 @@ model Subcontractor {
   updatedAt   DateTime     @updatedAt
   createdById String?
 
-  labourLogs LabourLog[]
+  labourLogs  LabourLog[]
+  inspections QualityInspection[]
+  ncrs        Ncr[]
 }
 
 model Equipment {
@@ -410,7 +420,8 @@ model QualityChecklist {
   updatedAt   DateTime     @updatedAt
   createdById String?
 
-  items ChecklistItem[]
+  items       ChecklistItem[]
+  inspections QualityInspection[]
 }
 
 model ChecklistItem {
@@ -510,14 +521,16 @@ model Activity {
   actualStart        DateTime?      @db.Date
   actualFinish       DateTime?      @db.Date
 
-  boqLinks      ActivityBoqLink[]
-  boms          MaterialBom[]
-  dprProgress   DprActivityProgress[]
-  labourLogs    LabourLog[]
-  materialUses  DprMaterialUse[]
-  issues        Issue[]
-  ledgerEntries InventoryLedger[]
-  requestItems  MaterialRequestItem[]
+  boqLinks           ActivityBoqLink[]
+  boms               MaterialBom[]
+  dprProgress        DprActivityProgress[]
+  labourLogs         LabourLog[]
+  materialUses       DprMaterialUse[]
+  issues             Issue[]
+  ledgerEntries      InventoryLedger[]
+  requestItems       MaterialRequestItem[]
+  qualityInspections QualityInspection[]
+  ncrs               Ncr[]
 
   @@unique([projectId, code])
   @@index([projectId, status])
@@ -1124,4 +1137,131 @@ model VendorPayment {
 
   @@index([invoiceId])
   @@index([projectId, paidOn])
+}
+
+// ───────────── Milestone 5: quality ─────────────
+
+enum InspectionStatus {
+  REQUESTED
+  COMPLETED
+}
+
+enum InspectionOutcome {
+  PASS
+  CONDITIONAL_PASS
+  REJECTED_NCR
+}
+
+enum NcrSeverity {
+  MINOR
+  MAJOR
+  CRITICAL
+}
+
+enum NcrStatus {
+  OPEN
+  CORRECTIVE_ACTION
+  RECTIFICATION
+  REINSPECTION
+  CLOSED
+}
+
+// A Site Engineer can request one (REQUESTED); the Quality Engineer completes it against a checklist.
+model QualityInspection {
+  id                String             @id @default(cuid())
+  code              String             @unique
+  projectId         String
+  project           Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  activityId        String
+  activity          Activity           @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  checklistId       String
+  checklist         QualityChecklist   @relation(fields: [checklistId], references: [id])
+  status            InspectionStatus   @default(REQUESTED)
+  inspectionDate    DateTime?          @db.Date
+  requestedById     String?
+  requestedBy       User?              @relation("InspRequester", fields: [requestedById], references: [id])
+  requestNote       String?
+  inspectorId       String?
+  inspector         User?              @relation("InspInspector", fields: [inspectorId], references: [id])
+  subcontractorId   String?
+  subcontractor     Subcontractor?     @relation(fields: [subcontractorId], references: [id])
+  totalCheckpoints  Int                @default(0)
+  passedCheckpoints Int                @default(0)
+  result            InspectionOutcome?
+  remarks           String?
+  ncrId             String?
+  clientTxnId       String?            @unique
+  isDemo            Boolean            @default(false)
+  createdAt         DateTime           @default(now())
+  completedAt       DateTime?
+  updatedAt         DateTime           @updatedAt
+
+  results    InspectionResult[]
+  raisedNcr  Ncr?               @relation("NcrFromInspection")
+  material   Material?          @relation(fields: [materialId], references: [id])
+  materialId String?
+
+  @@index([projectId, status])
+  @@index([activityId])
+}
+
+// One row per checkpoint answered. The text is copied so a later checklist edit never rewrites history.
+model InspectionResult {
+  id           String            @id @default(cuid())
+  inspectionId String
+  inspection   QualityInspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  seq          Int
+  text         String
+  passed       Boolean
+  note         String?
+
+  @@unique([inspectionId, seq])
+}
+
+model Ncr {
+  id                 String             @id @default(cuid())
+  code               String             @unique
+  projectId          String
+  project            Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  activityId         String?
+  activity           Activity?          @relation(fields: [activityId], references: [id], onDelete: SetNull)
+  inspectionId       String?            @unique
+  inspection         QualityInspection? @relation("NcrFromInspection", fields: [inspectionId], references: [id], onDelete: SetNull)
+  subcontractorId    String?
+  subcontractor      Subcontractor?     @relation(fields: [subcontractorId], references: [id])
+  severity           NcrSeverity
+  defect             String
+  status             NcrStatus          @default(OPEN)
+  correctiveAction   String?
+  rectificationNote  String?
+  reworkLabourCost   Decimal            @default(0) @db.Decimal(14, 2)
+  reworkMaterialCost Decimal            @default(0) @db.Decimal(14, 2)
+  timeLostDays       Decimal            @default(0) @db.Decimal(6, 1)
+  raisedById         String
+  raisedBy           User               @relation("NcrRaiser", fields: [raisedById], references: [id])
+  closedAt           DateTime?
+  closureHours       Int?
+  isDemo             Boolean            @default(false)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  actions    NcrAction[]
+  material   Material?   @relation(fields: [materialId], references: [id])
+  materialId String?
+
+  @@index([projectId, status])
+}
+
+// The NCR's timeline: every step, who did it and when.
+model NcrAction {
+  id        String   @id @default(cuid())
+  ncrId     String
+  ncr       Ncr      @relation(fields: [ncrId], references: [id], onDelete: Cascade)
+  step      String
+  note      String?
+  userId    String
+  user      User     @relation("NcrActor", fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@index([ncrId])
 }

@@ -231,3 +231,29 @@ An issue has a title, severity (Low, Medium, High, Critical), an optional activi
 - **Visibility.** Owner and Accounts (and the PM on assigned projects) see the money side. Procurement sees PO rates only. Store Keeper, Site Engineer and Client never see rates, invoices or payments — they are removed by the service before anything reaches the screen.
 - Billing to clients and Receivables remain placeholders in Phase 1.
 
+---
+
+## 14. Quality: inspections and NCRs  *(milestone 5 — Flow C)*
+
+**Inspection.** A Site Engineer can request one (activity, checklist, note). The Quality Engineer opens it (or starts a new one), marks every checkpoint Pass or Fail (with an optional note on failures) and completes it. The checkpoint wording is copied into the record, so later checklist edits never change history.
+
+| Passed checkpoints | Result |
+|---|---|
+| all | PASS |
+| 80% or more | CONDITIONAL_PASS |
+| below 80% | REJECTED_NCR — an NCR is created automatically |
+
+**NCR.** Carries the project, activity, subcontractor (if any), severity (Minor, Major, Critical), the defect, and the rework labour cost, material cost and time lost.
+
+| Step | Who | What is recorded |
+|---|---|---|
+| Open | (raised by the inspection) | Defect, severity |
+| Corrective action | Quality Engineer | What will be done and by whom |
+| Rectification | Quality Engineer | What was done, time lost (days) |
+| Reinspection | Quality Engineer | Pass closes the NCR; fail sends it back to Rectification |
+| Closed | — | Closure time in hours |
+
+The Owner and the project's PM record the rework labour and material cost (cost data). Everyone else sees no money on an NCR. Each step is written to the NCR's timeline and to the audit log.
+
+**Effects elsewhere.** Open Major NCRs cost 10 health points and Critical NCRs 20, and both appear in the portfolio's needs-attention list.
+

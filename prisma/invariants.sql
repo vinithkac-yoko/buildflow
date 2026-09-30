@@ -46,3 +46,12 @@ ALTER TABLE "VendorInvoice"        ADD CONSTRAINT invoice_amounts_valid      CHE
 ALTER TABLE "VendorPayment"        ADD CONSTRAINT payment_amount_positive    CHECK ("paymentAmount" > 0);
 
 -- The same invoice number can't be entered twice for one vendor: UNIQUE("vendorId","invoiceNo") is in schema.prisma.
+
+-- ═════════════════ Part 3 — quality (milestone 5; applied by the *_quality migration) ═════════════════
+
+-- Checkpoint counts are never impossible, a completed inspection always has a result, and an NCR is closed
+-- if and only if it has a closure time. Rework costs and time lost can't be negative.
+ALTER TABLE "QualityInspection" ADD CONSTRAINT inspection_counts_valid    CHECK ("totalCheckpoints" >= 0 AND "passedCheckpoints" >= 0 AND "passedCheckpoints" <= "totalCheckpoints");
+ALTER TABLE "QualityInspection" ADD CONSTRAINT inspection_completed_valid CHECK (status = 'REQUESTED' OR (result IS NOT NULL AND "inspectionDate" IS NOT NULL AND "totalCheckpoints" > 0));
+ALTER TABLE "Ncr"               ADD CONSTRAINT ncr_amounts_valid          CHECK ("reworkLabourCost" >= 0 AND "reworkMaterialCost" >= 0 AND "timeLostDays" >= 0);
+ALTER TABLE "Ncr"               ADD CONSTRAINT ncr_closed_valid           CHECK ((status = 'CLOSED') = ("closedAt" IS NOT NULL));

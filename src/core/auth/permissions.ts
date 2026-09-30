@@ -13,7 +13,7 @@ export const RESOURCES = [
   "user", "assignment", "master", "client", "project", "wbs", "activity", "boq",
   "dpr", "labour", "material_request", "purchase_request", "quotation", "purchase_order",
   "receipt", "inventory", "invoice", "payment", "work_order", "sub_bill",
-  "inspection", "ncr", "issue", "delay", "equipment", "document", "photo",
+  "inspection", "ncr", "rework_cost", "issue", "delay", "equipment", "document", "photo",
   "employee", "audit", "settings", "dashboard", "ask",
   "vendor", "subcontractor", "material", "checklist", "storage_location", "sop",
 ] as const;
@@ -43,7 +43,7 @@ export const PERMISSIONS: Record<Role, PermissionMap> = {
     project: ["read", "update"], wbs: RCUD, activity: RCUD, boq: RCUD,
     dpr: ["read", "update", "approve"], labour: R, material_request: ["read", "update"],
     purchase_request: RCU, quotation: R, purchase_order: R, receipt: R, inventory: R,
-    issue: RCUD, delay: RCUD, inspection: R, ncr: R, equipment: R,
+    issue: RCUD, delay: RCUD, inspection: R, ncr: R, rework_cost: ["read", "update"], equipment: R,
     document: RC, photo: RCU, assignment: R, dashboard: R, ask: R, master: R, client: R,
     vendor: R, subcontractor: R, material: R, checklist: R, storage_location: RCU, sop: R,
   },

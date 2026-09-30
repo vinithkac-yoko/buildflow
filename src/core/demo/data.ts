@@ -74,6 +74,7 @@ export const SUBCONTRACTORS: [string, string, string][] = [
   ["Balaji Bar Bending Contractors", "Bar Bender", "+91 90000 00202"],
   ["Sakthi Plumbing Services", "Plumber", "+91 90000 00203"],
   ["Vel Electricals & Wiring", "Electrician", "+91 90000 00204"],
+  ["Murugan Plastering & Finishes", "Mason", "+91 90000 00205"],
 ];
 
 // name, category, ownership

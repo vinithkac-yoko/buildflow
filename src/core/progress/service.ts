@@ -114,7 +114,7 @@ async function computePortfolio(ctx: Ctx, onlyProjectId?: string): Promise<Portf
   const projects = await loadScope(ctx, onlyProjectId);
   const ids = projects.map((p) => p.id);
 
-  const [activities, lastApproved, pending, issues, recent, approvedToday, stock] = await Promise.all([
+  const [activities, lastApproved, pending, issues, recent, approvedToday, stock, openNcrs] = await Promise.all([
     db.activity.findMany({
       where: { projectId: { in: ids } },
       select: { id: true, projectId: true, code: true, name: true, status: true, criticalPath: true, plannedCost: true, plannedMandays: true, plannedQty: true, actualQty: true, plannedStart: true, plannedFinish: true },
@@ -128,6 +128,7 @@ async function computePortfolio(ctx: Ctx, onlyProjectId?: string): Promise<Portf
       where: { projectId: { in: ids } },
       select: { projectId: true, quantity: true, materialId: true, material: { select: { name: true, reorderThreshold: true, uom: { select: { code: true } } } } },
     }),
+    db.ncr.findMany({ where: { projectId: { in: ids }, status: { not: "CLOSED" } }, select: { id: true, projectId: true, code: true, severity: true, defect: true, status: true } }),
   ]);
 
   const byProject = <T extends { projectId: string }>(rows: T[]) => {
@@ -137,6 +138,7 @@ async function computePortfolio(ctx: Ctx, onlyProjectId?: string): Promise<Portf
   };
   const actsBy = byProject(activities);
   const issuesBy = byProject(issues);
+  const ncrBy = byProject(openNcrs);
   const lastBy = new Map(lastApproved.map((r) => [r.projectId, r._max]));
   const pendingBy = new Map(pending.map((r) => [r.projectId, r._count]));
   const recentBy = new Map(recent.map((r) => [r.projectId, r._count]));
@@ -163,7 +165,7 @@ async function computePortfolio(ctx: Ctx, onlyProjectId?: string): Promise<Portf
     const eng = p.assignments.find((a) => a.user.role === "SITE_ENGINEER")?.user ?? null;
     const gap = actual - planned;
     const health = p.status === "ACTIVE" || p.status === "DELAYED"
-      ? computeHealth({ gapPct: gap, majorNcr: 0, criticalNcr: 0, criticalIssues: critical.length, reportsLast7: recentBy.get(p.id) ?? 0 })
+      ? computeHealth({ gapPct: gap, majorNcr: (ncrBy.get(p.id) ?? []).filter((n) => n.severity === "MAJOR").length, criticalNcr: (ncrBy.get(p.id) ?? []).filter((n) => n.severity === "CRITICAL").length, criticalIssues: critical.length, reportsLast7: recentBy.get(p.id) ?? 0 })
       : null;
 
     out.push(redact(ctx, {
@@ -210,6 +212,9 @@ async function computePortfolio(ctx: Ctx, onlyProjectId?: string): Promise<Portf
         title: daysSince === null ? "No approved daily report yet" : `No approved daily report for ${daysSince} days`,
         detail: `Last approved: ${lastDate ? formatDate(lastDate) : "never"}${eng ? ` · engineer ${eng.name}` : ""}`, href: `/progress?project=${p.id}`,
       });
+    }
+    for (const n of (ncrBy.get(p.id) ?? []).filter((x) => x.severity !== "MINOR")) {
+      attention.push({ ...base, kind: "NCR", priority: n.severity === "CRITICAL" ? 1 : 2, title: `${n.code}: ${n.defect.slice(0, 90)}${n.defect.length > 90 ? "…" : ""}`, detail: `${n.severity === "CRITICAL" ? "Critical" : "Major"} NCR · ${n.status === "OPEN" ? "no corrective action yet" : n.status.toLowerCase().replace("_", " ")}`, href: `/ncr/${n.id}` });
     }
     for (const i of proj.filter((x) => x.severity === "CRITICAL" || x.severity === "HIGH")) {
       attention.push({ ...base, kind: "CRITICAL_ISSUE", priority: (i.severity as IssueSeverity) === "CRITICAL" ? 1 : 2, title: i.title, detail: `${i.severity === "CRITICAL" ? "Critical" : "High"} issue · open`, href: `/issues?project=${p.id}` });
