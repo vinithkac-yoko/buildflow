@@ -21,7 +21,7 @@ import {
 } from "./data";
 
 /** Bump when the demo data shape changes so deployed demos refresh themselves. */
-export const SEED_VERSION = 6;
+export const SEED_VERSION = 7;
 const META_KEY = "demoSeedVersion";
 
 type Tx = Prisma.TransactionClient;

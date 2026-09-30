@@ -51,7 +51,7 @@ export function AppShell({
       <div className="min-w-0 flex flex-col">
         {/* Top bar */}
         <header className="glass sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border px-4 md:px-6">
-          <Link href="/" className="md:hidden flex items-center gap-2">
+          <Link href="/" className="md:hidden flex min-h-11 items-center gap-2">
             <span aria-hidden className="h-7 w-7 rounded-lg bg-brand grid place-items-center text-brand-on font-bold code">B</span>
             <span className="font-semibold tracking-tight">BUILDFlow</span>
           </Link>

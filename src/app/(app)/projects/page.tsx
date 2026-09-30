@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { MapPin } from "lucide-react";
 import { createProjectAction } from "@/actions/projects";
 import { listProjects } from "@/core/projects/service";
@@ -18,6 +19,7 @@ export default async function ProjectsPage() {
   const { ctx, user } = await requireSession();
   if (!can(ctx, "read", "project")) return <NoAccess />;
   const projects = await listProjects(ctx);
+  if (user.role === "CLIENT" && projects.length === 1) redirect(`/projects/${projects[0].id}`); // a homeowner with one project goes straight to it
   const showValue = projects.some((p) => p.contractValue !== undefined);
   const canCreate = can(ctx, "create", "project");
   const clients = canCreate ? await db.client.findMany({ where: { status: "ACTIVE" }, orderBy: { name: "asc" }, select: { id: true, name: true, code: true } }) : [];

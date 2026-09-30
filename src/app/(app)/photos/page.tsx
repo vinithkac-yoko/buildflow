@@ -16,14 +16,15 @@ export default async function PhotosPage() {
   const photos = await listPhotos(ctx);
   const canShare = can(ctx, "update", "photo");
   const team = ctx.role === "SITE_ENGINEER";
+  const client = ctx.role === "CLIENT";
   return (
     <div className="mx-auto max-w-4xl space-y-5">
       <div>
         <h1 className="text-2xl md:text-3xl">Photos</h1>
-        <p className="text-muted">{team ? "Photos from today’s report. Add more from your daily report." : "Recent site photos. Clients only see the ones you share, once the report is approved."}</p>
+        <p className="text-muted">{client ? "Photos from your site that your project manager has shared." : team ? "Photos from today’s report. Add more from your daily report." : "Recent site photos. Clients only see the ones you share, once the report is approved."}</p>
       </div>
       {photos.length === 0 ? (
-        <Card><p className="font-medium">No photos yet.</p><p className="text-muted">Take photos in your daily report and they appear here.</p></Card>
+        <Card><p className="font-medium">No photos yet.</p><p className="text-muted">{client ? "Photos appear here once your project manager shares them." : "Take photos in your daily report and they appear here."}</p></Card>
       ) : (
         <ul className="grid grid-cols-2 gap-3 md:grid-cols-3">
           {photos.map((p) => (

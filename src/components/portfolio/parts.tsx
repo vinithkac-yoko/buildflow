@@ -49,27 +49,40 @@ export function DualBar({ planned, actual, label }: { planned: number; actual: n
   );
 }
 
-const HEALTH: Record<HealthBand, { label: string; icon: LucideIcon; stroke: string; text: string }> = {
-  HEALTHY: { label: "Healthy", icon: CheckCircle2, stroke: "rgb(var(--brand-text))", text: "text-brand-text" },
-  WATCH: { label: "Watch", icon: TriangleAlert, stroke: "rgb(var(--warn))", text: "text-warn" },
-  AT_RISK: { label: "At risk", icon: OctagonAlert, stroke: "rgb(var(--danger))", text: "text-danger" },
+const HEALTH: Record<HealthBand, { label: string; icon: LucideIcon; border: string; text: string }> = {
+  HEALTHY: { label: "Healthy", icon: CheckCircle2, border: "border-brand-text/40", text: "text-brand-text" },
+  WATCH: { label: "Watch", icon: TriangleAlert, border: "border-warn/50", text: "text-warn" },
+  AT_RISK: { label: "At risk", icon: OctagonAlert, border: "border-danger/50", text: "text-danger" },
 };
 
-/** Circular gauge with the score inside, plus an icon-and-word chip beneath. */
-export function HealthRing({ score, band, tip }: { score: number; band: HealthBand; tip: string }) {
+/** Score and band as one chip (icon + number + word). The formula is on the chip's title and in the "How health is scored" tip. */
+export function HealthChip({ score, band, tip }: { score: number; band: HealthBand; tip: string }) {
   const h = HEALTH[band];
   const Icon = h.icon;
-  const r = 20;
-  const c = 2 * Math.PI * r;
   return (
-    <div className="flex flex-col items-center gap-1" title={tip}>
-      <svg viewBox="0 0 48 48" className="h-12 w-12 -rotate-90" role="img" aria-label={`Health score ${score} out of 100, ${h.label}`}>
-        <circle cx="24" cy="24" r={r} fill="none" stroke="rgb(var(--surface-2))" strokeWidth="5" />
-        <circle cx="24" cy="24" r={r} fill="none" stroke={h.stroke} strokeWidth="5" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - score / 100)} />
-        <text x="24" y="24" transform="rotate(90 24 24)" textAnchor="middle" dominantBaseline="central" className="num" fontSize="14" fontWeight="600" fill="rgb(var(--text))">{score}</text>
-      </svg>
-      <span className={cn("inline-flex items-center gap-1 text-xs font-semibold", h.text)}><Icon className="h-3.5 w-3.5" aria-hidden />{h.label}</span>
-    </div>
+    <span title={tip} className={cn("inline-flex min-h-8 items-center gap-1.5 rounded-full border px-2.5 text-sm font-semibold", h.border, h.text)} >
+      <Icon className="h-4 w-4" aria-hidden />
+      <span className="sr-only">Health score</span>
+      <span className="num">{score}</span>
+      <span className="font-medium">{h.label}</span>
+    </span>
+  );
+}
+
+/** The four parts of the health score, each as points out of its maximum. */
+export function HealthBreakdown({ h }: { h: NonNullable<ProjectProgress["health"]> }) {
+  const parts: [string, number, number][] = [["Schedule", h.schedule, 50], ["Quality (open NCRs)", h.ncr, 20], ["Open critical issues", h.issues, 15], ["Daily reports, last 7 days", h.compliance, 15]];
+  return (
+    <ul className="grid gap-x-6 gap-y-2 sm:grid-cols-2" aria-label="How the health score is made up">
+      {parts.map(([label, got, max]) => (
+        <li key={label}>
+          <div className="flex justify-between text-sm"><span>{label}</span><span className="num font-semibold">{got}<span className="font-normal text-muted"> / {max}</span></span></div>
+          <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface-2" role="img" aria-label={`${label}: ${got} of ${max} points`}>
+            <div className={cn("h-full rounded-full", got >= max ? "bg-brand" : got >= max * 0.5 ? "bg-warn" : "bg-danger")} style={{ width: `${Math.round((got / max) * 100)}%` }} />
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -77,7 +90,7 @@ export function HealthRing({ score, band, tip }: { score: number; band: HealthBa
 export function InfoTip({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <span className="group relative inline-flex">
-      <button type="button" aria-label={label} className="grid h-6 w-6 place-items-center rounded-full border border-border text-xs font-bold text-muted hover:text-text cursor-help">i</button>
+      <button type="button" aria-label={label} className="grid h-11 w-11 cursor-help place-items-center text-muted hover:text-text"><span className="grid h-6 w-6 place-items-center rounded-full border border-border text-xs font-bold" aria-hidden>i</span></button>
       <span role="tooltip" className="glass pointer-events-none absolute left-1/2 top-full z-40 mt-1 hidden w-72 -translate-x-1/2 rounded-xl border border-border p-3 text-left text-sm font-normal normal-case tracking-normal text-text shadow-xl group-focus-within:block group-hover:block">
         {children}
       </span>

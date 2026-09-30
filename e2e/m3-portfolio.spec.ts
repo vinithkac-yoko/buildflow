@@ -12,7 +12,7 @@ test.describe("Portfolio progress (rough cut, polished in milestone 7)", () => {
     await expect(page.getByText(/\d sites/).first()).toBeVisible();
 
     // Every live project shows numbers, not just bars.
-    const cards = page.locator("article");
+    const cards = page.locator("main ul.panel > li");
     expect(await cards.count()).toBeGreaterThanOrEqual(7);
     await expect(cards.first().getByText(/Plan [\d.]+%/)).toBeVisible();
     await expect(cards.first().getByText(/Actual [\d.]+%/)).toBeVisible();
@@ -26,10 +26,10 @@ test.describe("Portfolio progress (rough cut, polished in milestone 7)", () => {
 
     // Flat "worst first" view and status filters.
     await page.getByRole("link", { name: "Worst first" }).click();
-    await expect(page.locator("article").first()).toContainText("Avinashi Road"); // the clearly-behind site leads
+    await expect(page.locator("main ul.panel > li").first()).toContainText("Avinashi Road"); // the clearly-behind site leads
     await page.getByRole("link", { name: "All", exact: true }).click();
     // The 9 demo projects, plus any the m2 spec created earlier in this run.
-    await expect.poll(() => page.locator("article").count()).toBeGreaterThanOrEqual(9);
+    await expect.poll(() => page.locator("main ul.panel > li").count()).toBeGreaterThanOrEqual(9);
   });
 
   test("drilling into a project shows progress by stage and the S-curve, and a table alternative", async ({ page }) => {
@@ -44,7 +44,7 @@ test.describe("Portfolio progress (rough cut, polished in milestone 7)", () => {
 
   test("a PM sees only their own projects and no contract value beyond their own", async ({ page }) => {
     await login(page, "pm2@buildflow.demo");
-    const names = await page.locator("article h3, article a").allInnerTexts();
+    const names = await page.locator("main ul.panel > li a").allInnerTexts();
     expect(names.join(" ")).toContain("Avinashi Road");
     expect(names.join(" ")).not.toContain("Vadavalli");
   });

@@ -3,6 +3,7 @@
  * (files are real, small PDFs written to the upload folder), and subcontractor work orders with measurements, bills and payments.
  */
 import { randomUUID } from "node:crypto";
+import { deflateSync } from "node:zlib";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { DelayCategory, DocumentCategory, DocumentStatus, EquipmentLogKind, InvoiceStatus, PaymentMode, Prisma, ResponsibleFunction } from "@prisma/client";
@@ -39,6 +40,36 @@ export function makePdf(title: string): Buffer {
   out += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n${offsets.map((o) => `${String(o).padStart(10, "0")} 00000 n \n`).join("")}`;
   out += `trailer\n<< /Size ${objs.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
   return Buffer.from(out, "latin1");
+}
+
+/** A small illustrative "site photo" (PNG): sky, ground, and a frame that grows with `stage` (1–5). Generated, so no image files are shipped. */
+export function makeSitePng(stage: number, variant = 0): Buffer {
+  const W = 480, H = 320;
+  const px = Buffer.alloc(W * H * 3);
+  const set = (x: number, y: number, r: number, g: number, b: number) => { if (x >= 0 && x < W && y >= 0 && y < H) { const i = (y * W + x) * 3; px[i] = r; px[i + 1] = g; px[i + 2] = b; } };
+  const horizon = 232;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    if (y < horizon) { const t = y / horizon; set(x, y, Math.round(120 + 90 * t), Math.round(170 + 60 * t), Math.round(225 + 20 * t)); }
+    else { const t = (y - horizon) / (H - horizon); set(x, y, Math.round(150 - 40 * t + ((x * 7 + y * 13) % 9)), Math.round(122 - 34 * t + ((x * 5 + y * 11) % 7)), Math.round(92 - 26 * t)); }
+  }
+  const rect = (x0: number, y0: number, x1: number, y1: number, c: [number, number, number]) => { for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) set(x, y, ...c); };
+  const floors = Math.min(stage, 3), x0 = 120 + variant * 18, x1 = x0 + 220;
+  rect(x0 - 8, horizon - 6, x1 + 8, horizon + 4, [120, 116, 110]); // plinth
+  for (let f = 0; f < floors; f++) {
+    const top = horizon - 6 - (f + 1) * 52, bot = horizon - 6 - f * 52;
+    rect(x0, top, x1, bot, stage >= 4 ? [226, 218, 200] : [166, 168, 172]); // walls: grey block, then plastered
+    for (let k = 0; k < 4; k++) rect(x0 + 14 + k * 54, top + 14, x0 + 38 + k * 54, top + 40, stage >= 5 ? [70, 110, 150] : [40, 44, 52]); // openings
+    rect(x0 - 6, top - 6, x1 + 6, top, [190, 190, 186]); // slab edge
+  }
+  if (stage <= 3) for (let f = 0; f <= floors; f++) for (let k = 0; k < 6; k++) rect(x0 + k * 44, horizon - 6 - f * 52 - 46, x0 + k * 44 + 3, horizon - 6 - f * 52, [232, 160, 40]); // props / scaffold
+  rect(0, horizon + 30, W, horizon + 34, [96, 84, 66]); // track
+  const raw = Buffer.alloc((W * 3 + 1) * H);
+  for (let y = 0; y < H; y++) { raw[y * (W * 3 + 1)] = 0; px.copy(raw, y * (W * 3 + 1) + 1, y * W * 3, (y + 1) * W * 3); }
+  const crcTable = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
+  const crc = (b: Buffer) => { let c = 0xffffffff; for (const v of b) c = crcTable[(c ^ v) & 0xff] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
+  const chunk = (type: string, data: Buffer) => { const len = Buffer.alloc(4); len.writeUInt32BE(data.length); const td = Buffer.concat([Buffer.from(type), data]); const c = Buffer.alloc(4); c.writeUInt32BE(crc(td)); return Buffer.concat([len, td, c]); };
+  const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(W, 0); ihdr.writeUInt32BE(H, 4); ihdr[8] = 8; ihdr[9] = 2;
+  return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk("IHDR", ihdr), chunk("IDAT", deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]);
 }
 
 async function writePdf(projectId: string, title: string) {
@@ -150,6 +181,26 @@ export async function seedOps(tx: Tx, input: OpsSeedInput) {
           documentId: doc.id, version: v, fileKey: f.key, fileName: `${d.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-v${v}.pdf`, mimeType: "application/pdf", sizeBytes: f.size,
           isCurrent: v === d.versions, note: v > 1 ? "Revised after review comments" : null, uploadedById: uploader, createdAt: at(Math.max(0, d.ageDays - (v - 1) * 3)), isDemo: true,
         },
+      });
+    }
+  }
+
+  // ── site photos on recent approved reports (the client's project shares some of them) ──
+  const photoPlan: { p: number; shared: number; total: number; stage: number }[] = [{ p: 1, shared: 5, total: 6, stage: 3 }, { p: 3, shared: 0, total: 3, stage: 5 }, { p: 4, shared: 0, total: 2, stage: 3 }];
+  for (const pp of photoPlan) {
+    const p = proj(pp.p);
+    if (!p) continue;
+    const dprs = await tx.dpr.findMany({ where: { projectId: p.id, status: "APPROVED" }, orderBy: { reportDate: "desc" }, take: 4, select: { id: true, reportDate: true } });
+    if (dprs.length === 0) continue;
+    const dir = path.join(uploadRoot(), "dpr", p.id);
+    await mkdir(dir, { recursive: true });
+    for (let n = 0; n < pp.total; n++) {
+      const dpr = dprs[n % dprs.length];
+      const key = `${randomUUID()}.png`;
+      const buf = makeSitePng(pp.stage, n % 3);
+      await writeFile(path.join(dir, key), buf);
+      await tx.dprPhoto.create({
+        data: { dprId: dpr.id, projectId: p.id, fileKey: key, originalName: `site-${n + 1}.png`, mimeType: "image/png", sizeBytes: buf.length, uploadedById: user(p.engineerEmail ?? p.pmEmail), clientVisible: n < pp.shared, createdAt: new Date(dpr.reportDate.getTime() + 11 * 3_600_000 + n * 60_000), isDemo: true },
       });
     }
   }

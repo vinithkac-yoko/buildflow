@@ -284,3 +284,13 @@ Categories: Agreement, BOQ, Drawings, DPR, Purchase orders, Invoices, Quality, P
 
 A work order can be cancelled only before any work is measured. When every line is fully measured it shows as "Fully measured". Rates, bills and payments are cost data: Owner, Accounts and the project's PM see them; nobody else can even open a work order.
 
+---
+
+## 19. Dashboards and the client portal  *(milestone 7 — Flow D)*
+
+**Portfolio (Owner and PMs).** A freshness strip ("Updated from N approved reports today · last update HH:MM"), one sentence on how many live sites are on track, slightly behind or behind, and a bar with one segment per site. **Needs attention** lists exceptions worst first (behind-schedule activities with critical-path first, missing and waiting reports, open Major/Critical NCRs, serious issues, low stock). **Projects** are grouped by PM (with a summary each) or listed worst first, filtered by status and PM. Each site shows planned vs actual, days ahead or behind, a small S-curve, the current finish date (and slip against baseline), the last approved report and its health chip. A PM sees only their own sites.
+
+**Project dashboard.** Header facts, an "Open right now" strip, the progress bar and S-curve (with a table alternative), the health score and its four parts, stage-by-stage bars, module tiles, team and storage locations.
+
+**Client portal.** The homeowner sees how much of their home is complete (approved work only), progress by stage, the expected finish date, the latest approved site updates with the photos the PM shared, and the documents released to them. Nothing internal reaches the browser: no plan comparison, days behind, health, issues, NCRs, delays, costs, remarks, or unshared photos and documents.
+

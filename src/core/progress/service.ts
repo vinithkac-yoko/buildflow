@@ -1,6 +1,6 @@
 import type { IssueSeverity, ProjectStatus } from "@prisma/client";
 import { db } from "@/lib/db";
-import { assertCan, redact } from "../auth/permissions";
+import { assertCan, can, redact } from "../auth/permissions";
 import { DAY_MS, addDays, dateKey, dayDiff, istToday } from "../dates";
 import { forbidden, notFound } from "../errors";
 import { formatDate } from "@/lib/format";
@@ -48,6 +48,9 @@ export interface ProjectProgress {
   pendingReports: number;
   openIssues: number;
   criticalIssues: number;
+  /** Open NCRs (any severity) and how many of them are Major or Critical. */
+  openNcrs: number;
+  seriousNcrs: number;
   health: Health | null;
 }
 
@@ -177,7 +180,7 @@ async function computePortfolio(ctx: Ctx, onlyProjectId?: string): Promise<Portf
       daysAheadBehind: live && plan.length ? daysAheadBehind(plan, today) : 0, method: weightMethod(plan),
       lastApprovedDate: lastDate ? dateKey(lastDate) : null, lastApprovedAt: last?.approvedAt?.toISOString() ?? null,
       daysSinceReport: daysSince, missingReport: missing, pendingReports: pendingBy.get(p.id) ?? 0,
-      openIssues: proj.length, criticalIssues: critical.length, health,
+      openIssues: proj.length, criticalIssues: critical.length, openNcrs: (ncrBy.get(p.id) ?? []).length, seriousNcrs: (ncrBy.get(p.id) ?? []).filter((n) => n.severity !== "MINOR").length, health,
     } satisfies ProjectProgress, p.id));
 
     // ── needs-attention items ──
@@ -251,6 +254,9 @@ async function computePortfolio(ctx: Ctx, onlyProjectId?: string): Promise<Portf
 
 export interface WbsProgress { code: string; name: string; plannedPct: number; actualPct: number; activities: number }
 export interface ProjectDetailProgress extends ProjectProgress {
+  /** What needs attention on this project (same items as the portfolio list). */
+  attention: AttentionItem[];
+  ongoingDelays: number;
   wbs: WbsProgress[];
   curve: CurvePoint[];
   weightNote: string;
@@ -314,8 +320,10 @@ export async function projectDetailProgress(ctx: Ctx, projectId: string): Promis
   const today = istToday(ctx.now);
   const project = await db.project.findUnique({ where: { id: projectId }, select: { id: true, baselineStart: true, baselineFinish: true } });
   if (!project) throw notFound("That project");
-  const [base] = (await computePortfolio(ctx, projectId)).projects;
+  const portfolio = await computePortfolio(ctx, projectId);
+  const [base] = portfolio.projects;
   if (!base) throw notFound("That project");
+  const ongoingDelays = can(ctx, "read", "delay", projectId) ? await db.delay.count({ where: { projectId, endDate: null } }) : 0;
 
   const [acts, wbsNodes, lines] = await Promise.all([
     db.activity.findMany({ where: { projectId }, include: { wbsNode: { select: { code: true } } } }),
@@ -332,7 +340,72 @@ export async function projectDetailProgress(ctx: Ctx, projectId: string): Promis
     return { code: n.code, name: n.name, plannedPct: Math.round(plannedPct(mine, today) * 10) / 10, actualPct: Math.round(actualPct(mine) * 10) / 10, activities: mine.length };
   });
   return {
-    ...base, wbs, curve: curveFor(project, plan, lines, today),
+    ...base, attention: portfolio.attention.filter((a) => a.projectId === projectId), ongoingDelays, wbs, curve: curveFor(project, plan, lines, today),
     weightNote: base.method === "cost" ? "Weighted by each activity's planned cost." : base.method === "mandays" ? "Weighted by planned mandays (cost is not available)." : "Every activity counts equally.",
+  };
+}
+
+// ───────────── Client portal ─────────────
+
+export interface ClientPortalView {
+  projectId: string;
+  code: string;
+  name: string;
+  location: string;
+  status: ProjectStatus;
+  startDate: string;
+  expectedFinish: string;
+  /** Approved work only. No plan comparison, days behind, health, issues or cost. */
+  actualPct: number;
+  stages: { code: string; name: string; actualPct: number }[];
+  lastUpdate: string | null;
+  updates: { id: string; date: string; weather: string | null; workedOn: string[]; photoIds: string[] }[];
+  photoCount: number;
+  documents: { id: string; title: string; category: string; versionId: string; updatedAt: string }[];
+}
+
+const WEATHER_TEXT: Record<string, string> = { SUNNY: "Sunny", CLOUDY: "Cloudy", RAIN: "Rain", HEAVY_RAIN: "Heavy rain" };
+
+/**
+ * What the homeowner sees of their project: approved progress only, the last approved site updates with the photos the PM chose
+ * to share, and released documents. Everything internal (plan, health, issues, NCRs, delays, cost, remarks) is left out here,
+ * in the service, rather than hidden on screen.
+ */
+export async function clientPortal(ctx: Ctx, projectId: string): Promise<ClientPortalView> {
+  assertCan(ctx, "read", "project", projectId);
+  const project = await db.project.findUnique({ where: { id: projectId }, select: { id: true, code: true, name: true, location: true, status: true, baselineStart: true, currentFinish: true } });
+  if (!project) throw notFound("That project");
+  const [acts, wbsNodes, dprs, photoCount, docs] = await Promise.all([
+    db.activity.findMany({ where: { projectId }, include: { wbsNode: { select: { code: true } } } }),
+    db.wbsNode.findMany({ where: { projectId, parentId: null }, orderBy: { seq: "asc" } }),
+    db.dpr.findMany({
+      where: { projectId, status: "APPROVED" },
+      orderBy: { reportDate: "desc" }, take: 8,
+      select: {
+        id: true, reportDate: true, weather: true, noWork: true,
+        progress: { where: { quantity: { gt: 0 } }, select: { activity: { select: { name: true } } } },
+        photos: { where: { clientVisible: true }, select: { id: true }, orderBy: { createdAt: "asc" }, take: 6 },
+      },
+    }),
+    db.dprPhoto.count({ where: { projectId, clientVisible: true, dpr: { status: "APPROVED" } } }),
+    db.document.findMany({
+      where: { projectId, status: "RELEASED" }, orderBy: { updatedAt: "desc" }, take: 5,
+      select: { id: true, title: true, category: true, updatedAt: true, versions: { where: { isCurrent: true }, select: { id: true }, take: 1 } },
+    }),
+  ]);
+  const plan = toPlan(acts);
+  const top = new Map(acts.map((a) => [a.id, a.wbsNode.code.split(".")[0]]));
+  return {
+    projectId, code: project.code, name: project.name, location: project.location, status: project.status,
+    startDate: dateKey(project.baselineStart), expectedFinish: dateKey(project.currentFinish),
+    actualPct: plan.length ? Math.round(actualPct(plan) * 10) / 10 : 0,
+    stages: wbsNodes.map((n) => ({ code: n.code, name: n.name, actualPct: Math.round(actualPct(plan.filter((a) => top.get(a.id) === n.code)) * 10) / 10 })),
+    lastUpdate: dprs[0] ? dateKey(dprs[0].reportDate) : null,
+    updates: dprs.map((d) => ({
+      id: d.id, date: dateKey(d.reportDate), weather: d.weather ? WEATHER_TEXT[d.weather] ?? null : null,
+      workedOn: d.noWork ? [] : [...new Set(d.progress.map((p) => p.activity.name))].slice(0, 6), photoIds: d.photos.map((p) => p.id),
+    })),
+    photoCount,
+    documents: docs.filter((d) => d.versions[0]).map((d) => ({ id: d.id, title: d.title, category: d.category, versionId: d.versions[0].id, updatedAt: d.updatedAt.toISOString() })),
   };
 }

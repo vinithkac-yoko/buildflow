@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Camera, CloudRain, HardHat, ListChecks } from "lucide-react";
 import type { DprStatus } from "@prisma/client";
 import { can } from "@/core/auth/permissions";
@@ -23,7 +24,10 @@ const inputCls = "min-h-11 w-full rounded-xl border border-border bg-bg px-3 tex
 
 export default async function ProgressPage({ searchParams }: { searchParams: Promise<SP> }) {
   const { ctx, user } = await requireSession();
-  if (user.role === "CLIENT") return <NoAccess message="Your approved progress view is on its way. It arrives in a later release." />;
+  if (user.role === "CLIENT") {
+    const own = await listProjects(ctx);
+    redirect(own.length === 1 ? `/projects/${own[0].id}` : "/projects"); // the client's progress view is their project page
+  }
   if (!can(ctx, "approve", "dpr") && user.role !== "OWNER") return <NoAccess message="Daily reports from every site are reviewed here by Project Managers and the Owner. You can file yours under DPR." />;
 
   const sp = await searchParams;

@@ -9,7 +9,9 @@ import { getProject } from "@/core/projects/service";
 import { PROJECT_STATUS_LABEL, PROJECT_TRANSITIONS } from "@/core/projects/transitions";
 import { listAssignments } from "@/core/users/assignments";
 import { healthFormula, projectDetailProgress } from "@/core/progress/service";
-import { BandChip, DualBar, HealthRing } from "@/components/portfolio/parts";
+import { BandChip, DualBar, HealthBreakdown, HealthChip, InfoTip } from "@/components/portfolio/parts";
+import { ClientHome } from "@/components/client/client-home";
+import { clientPortal } from "@/core/progress/service";
 import { SCurve } from "@/components/portfolio/scurve";
 import { daysLabel } from "@/lib/format";
 import { ActionButton } from "@/components/forms/action-button";
@@ -57,6 +59,8 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
     throw e;
   }
 
+  if (ctx.role === "CLIENT") return <ClientHome v={await clientPortal(ctx, id)} />;
+
   const canEdit = can(ctx, "update", "project", id);
   const canPlan = can(ctx, "read", "activity", id);
   const showValue = canSeeField(ctx, "contractValue", id);
@@ -65,7 +69,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
     can(ctx, "read", "storage_location", id) ? listStorage(ctx, id) : Promise.resolve([]),
   ]);
   const nextStatuses = canEdit ? PROJECT_TRANSITIONS[p.status] : [];
-  const showProgress = can(ctx, "read", "dashboard") && ctx.role !== "CLIENT" && p.status !== "PLANNING";
+  const showProgress = can(ctx, "read", "dashboard") && p.status !== "PLANNING";
   const progress = showProgress ? await projectDetailProgress(ctx, id).catch(() => null) : null;
 
   const facts: [string, string | undefined][] = [
@@ -75,7 +79,6 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
     ["Start date", formatDate(p.baselineStart)],
     ["Target finish", formatDate(p.baselineFinish)],
     ["Current finish", formatDate(p.currentFinish)],
-    ["Health score", p.healthScore === null ? "Not scored yet" : String(p.healthScore)],
   ];
   const iso = (d: Date) => d.toISOString().slice(0, 10);
 
@@ -131,6 +134,8 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
         )}
       </Card>
 
+      {progress && <OpenItems id={id} progress={progress} />}
+
       {progress && (
         <Card className="space-y-5">
           <div className="flex flex-wrap items-start justify-between gap-4">
@@ -143,10 +148,19 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
               </div>
               <p className="text-sm text-muted">{progress.weightNote}</p>
             </div>
-            {progress.health && <HealthRing score={progress.health.score} band={progress.health.band} tip={healthFormula()} />}
           </div>
           {progress.curve.length > 1 && <SCurve id={`detail-${id}`} data={progress.curve} height={170} />}
-          <div>
+          {progress.health && (
+            <div className="space-y-3 border-t border-border pt-4">
+              <div className="flex flex-wrap items-center gap-3">
+                <h3 className="text-[15px] font-semibold">Health</h3>
+                <HealthChip score={progress.health.score} band={progress.health.band} tip={healthFormula()} />
+                <InfoTip label="How health is scored"><p className="font-semibold">How health is scored (0–100)</p><p className="mt-1">{healthFormula()}</p><p className="mt-1">75 and above is Healthy, 50–74 Watch, below 50 At risk.</p></InfoTip>
+              </div>
+              <HealthBreakdown h={progress.health} />
+            </div>
+          )}
+          <div className="border-t border-border pt-4">
             <h3 className="mb-2 text-[15px] font-semibold">By stage</h3>
             <ul className="grid gap-x-8 gap-y-3 md:grid-cols-2">
               {progress.wbs.map((w) => (
@@ -224,5 +238,35 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
         )}
       </div>
     </div>
+  );
+}
+
+/** What is open on this project right now, each a link to its list. Only non-zero items are shown. */
+function OpenItems({ id, progress }: { id: string; progress: Awaited<ReturnType<typeof projectDetailProgress>> }) {
+  const lowStock = progress.attention.filter((a) => a.kind === "LOW_STOCK").length;
+  type Tone = "danger" | "warn" | "plain";
+  const items: { n: number; label: string; href: string; tone: Tone }[] = [
+    { n: progress.pendingReports, label: progress.pendingReports === 1 ? "report waiting for approval" : "reports waiting for approval", href: `/progress?status=SUBMITTED&project=${id}`, tone: "warn" as Tone },
+    { n: progress.openIssues, label: progress.openIssues === 1 ? "open issue" : "open issues", href: `/issues?project=${id}`, tone: (progress.criticalIssues > 0 ? "danger" : "plain") as Tone },
+    { n: progress.openNcrs, label: progress.openNcrs === 1 ? "open NCR" : "open NCRs", href: `/ncr`, tone: (progress.seriousNcrs > 0 ? "danger" : "plain") as Tone },
+    { n: progress.ongoingDelays, label: progress.ongoingDelays === 1 ? "ongoing delay" : "ongoing delays", href: `/issues?tab=delays&project=${id}`, tone: "warn" as Tone },
+    { n: lowStock, label: lowStock === 1 ? "low-stock material" : "low-stock materials", href: `/materials?project=${id}`, tone: "warn" as Tone },
+  ].filter((i) => i.n > 0);
+  return (
+    <section aria-labelledby="open-items">
+      <h2 id="open-items" className="mb-2 text-lg">Open right now</h2>
+      {progress.missingReport && <p className="mb-2 flex items-center gap-2 text-[16px] font-semibold text-danger"><span aria-hidden>●</span> No approved daily report for {progress.daysSinceReport ?? "several"} days.</p>}
+      {items.length === 0 && !progress.missingReport ? <p className="text-muted">Nothing is open. Reports, issues, NCRs and stock are all in order.</p> : (
+        <ul className="flex flex-wrap gap-2">
+          {items.map((i) => (
+            <li key={i.label}>
+              <Link href={i.href} className={`inline-flex min-h-12 items-center gap-2 rounded-xl border px-3.5 text-[15px] hover:bg-surface-2 ${i.tone === "danger" ? "border-danger/50" : i.tone === "warn" ? "border-warn/50" : "border-border"}`}>
+                <span className={`num text-xl font-semibold ${i.tone === "danger" ? "text-danger" : i.tone === "warn" ? "text-warn" : ""}`}>{i.n}</span>{i.label}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }

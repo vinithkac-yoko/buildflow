@@ -88,8 +88,8 @@ export const NAV: Record<Role, NavItem[]> = {
     item("Progress", "/progress", "progress", 7, "Approved progress."),
     item("Photos", "/photos", "photos", 7, "Photos your project manager has shared."),
     item("Documents", "/documents", "documents", 6, "Released documents."),
-    item("Bills", "/bills", "bills", 7, "Bills."),
-    item("Payments", "/payments", "payments", 7, "Payments."),
+    item("Bills", "/bills", "bills", 9, "Your bills will be shared here in a later release (a read-only placeholder in Phase 1)."),
+    item("Payments", "/payments", "payments", 9, "Your payment history will appear here in a later release (a read-only placeholder in Phase 1)."),
     item("Handover", "/handover", "handover", 6, "Handover documents."),
   ],
   MARKETING: [

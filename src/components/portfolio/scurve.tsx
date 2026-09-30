@@ -9,7 +9,7 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 const fmtDate = (s: string) => `${s.slice(8, 10)}-${MONTHS[Number(s.slice(5, 7)) - 1]}-${s.slice(0, 4)}`;
 
 /** Cumulative planned (dashed steel blue) vs actual (solid green with soft fill) %, one small multiple per project. */
-export function SCurve({ data, id, height = 84 }: { data: Point[]; id: string; height?: number }) {
+export function SCurve({ data, id, height = 84, compact = false, summary }: { data: Point[]; id: string; height?: number; compact?: boolean; summary?: string }) {
   const [ready, setReady] = useState(false);
   useEffect(() => setReady(true), []);
   const gid = `g-${id}`;
@@ -17,7 +17,7 @@ export function SCurve({ data, id, height = 84 }: { data: Point[]; id: string; h
 
   return (
     <div>
-      <div style={{ height }} aria-hidden={false}>
+      <div style={{ height }} role={compact ? "img" : undefined} aria-label={compact ? summary ?? "Planned versus actual progress over time" : undefined}>
         {ready && (
           <ResponsiveContainer width="100%" height="100%" minWidth={120} initialDimension={{ width: 240, height }}>
             <ComposedChart data={data} margin={{ top: 4, right: 2, bottom: 0, left: 2 }}>
@@ -43,7 +43,7 @@ export function SCurve({ data, id, height = 84 }: { data: Point[]; id: string; h
           </ResponsiveContainer>
         )}
       </div>
-      <details className="mt-1 text-sm">
+      {!compact && <details className="mt-1 text-sm">
         <summary className="inline-flex min-h-8 cursor-pointer items-center text-muted hover:text-text">View as table</summary>
         <table className="num mt-1 w-full text-left text-xs">
           <caption className="sr-only">Cumulative planned and actual percent complete over time</caption>
@@ -54,7 +54,7 @@ export function SCurve({ data, id, height = 84 }: { data: Point[]; id: string; h
             ))}
           </tbody>
         </table>
-      </details>
+      </details>}
     </div>
   );
 }

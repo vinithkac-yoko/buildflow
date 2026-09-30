@@ -100,7 +100,7 @@ export function PhotoCapture({
 
   return (
     <div className="space-y-3">
-      <input ref={input} type="file" accept="image/*" capture="environment" multiple className="sr-only" tabIndex={-1} aria-hidden onChange={(e) => void onFiles(e.target.files)} />
+      <input ref={input} type="file" accept="image/*" capture="environment" multiple className="sr-only" tabIndex={-1} aria-hidden aria-label="Take or choose photos" onChange={(e) => void onFiles(e.target.files)} />
       <button
         type="button" disabled={disabled} onClick={() => input.current?.click()}
         className="flex min-h-16 w-full items-center justify-center gap-3 rounded-xl border-2 border-dashed border-brand-text/60 bg-bg text-[18px] font-semibold text-brand-text hover:bg-surface-2 disabled:opacity-50 cursor-pointer"

@@ -321,7 +321,7 @@ export function DprForm({ report }: { report: EngineerReport }) {
                 <div className="flex items-center justify-between gap-2">
                   <h4 className="font-semibold">Labour</h4>
                   {yHas && (
-                    <button type="button" onClick={() => sameAsYesterday(l)} className="flex min-h-12 items-center gap-1.5 rounded-xl border-2 border-border px-3 text-[15px] font-semibold hover:bg-surface-2 cursor-pointer">
+                    <button type="button" onClick={() => sameAsYesterday(l)} className="flex min-h-14 items-center gap-1.5 rounded-xl border-2 border-border px-3 text-[15px] font-semibold hover:bg-surface-2 cursor-pointer">
                       <History className="h-5 w-5" aria-hidden /> Same as yesterday
                     </button>
                   )}
@@ -337,7 +337,7 @@ export function DprForm({ report }: { report: EngineerReport }) {
                             <span className="font-semibold">{tradeName.get(r.tradeId) ?? "Trade"}</span> · <span className="num">{r.headcount}</span> {r.headcount === 1 ? "person" : "people"} · <span className="num">{r.hours}</span> h · {SOURCE_LABEL[r.source]}
                             {r.subcontractorId ? ` (${subName.get(r.subcontractorId) ?? "subcontractor"})` : ""}
                           </p>
-                          <button type="button" onClick={() => setRow(l.key, r.key, { open: true })} className="min-h-12 shrink-0 rounded-xl px-3 font-semibold text-brand-text hover:bg-surface-2 cursor-pointer">Edit</button>
+                          <button type="button" onClick={() => setRow(l.key, r.key, { open: true })} className="min-h-14 min-w-14 shrink-0 rounded-xl px-3 font-semibold text-brand-text hover:bg-surface-2 cursor-pointer">Edit</button>
                         </div>
                       ) : (
                         <div className="space-y-3">
@@ -538,7 +538,7 @@ export function DprForm({ report }: { report: EngineerReport }) {
         onPick={(v) => { if (picker?.kind === "matActivity") setMats((cur) => cur.map((x) => (x.key === picker.mat ? { ...x, activityId: v } : x))); setPicker(null); }} />
 
       <p className="mt-6 text-center text-sm text-muted">
-        <Link href="/my-projects" className="underline">Back to My Projects</Link>
+        <Link href="/my-projects" className="inline-flex min-h-14 items-center underline">Back to My Projects</Link>
       </p>
     </div>
   );
