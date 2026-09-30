@@ -257,3 +257,30 @@ The Owner and the project's PM record the rework labour and material cost (cost 
 
 **Effects elsewhere.** Open Major NCRs cost 10 health points and Critical NCRs 20, and both appear in the portfolio's needs-attention list.
 
+---
+
+## 15. Issues and delays  *(milestone 6)*
+
+**Issues** can be reported from the daily report or from the Issues screen (title, severity, optional activity, description and a fix-by date). The PM moves them Open → In progress → Resolved → Closed and can set the target date.
+
+**Delays** (PM and Owner) record what held work up: category, what caused it, start and end dates (empty while it is still going on), the activity affected, whether it hits the critical path, cost impact (cost data), evidence, impact, the **responsible function** and the corrective action. Days lost count the first and last day. A delay never names a person.
+
+## 16. Equipment  *(milestone 6)*
+
+The PM (or Owner) assigns a machine to a project and optionally an activity; it can be on one project at a time. Logs record usage hours (at most 24 per machine per day), maintenance and breakdowns (both need a note). Breakdown and maintenance change the machine's status; **Back in service** returns it to the site or to "available". **Release** takes it off the project.
+
+## 17. Documents  *(milestone 6)*
+
+Categories: Agreement, BOQ, Drawings, DPR, Purchase orders, Invoices, Quality, Payment, Handover, Photos. The PM or Owner uploads a file (PDF, DWG, DXF, Excel, Word, picture; up to 25 MB), approves or rejects it (a reason is required), and **releases** it to the client. A new version supersedes the current one: only the latest is current, old versions stay viewable to the team, and the document goes back to "waiting for approval". Clients see only released documents and only their current version; downloads are always checked against project access and status.
+
+## 18. Subcontractor work orders  *(milestone 6)*
+
+| Step | Who | What |
+|---|---|---|
+| Work order | PM | Subcontractor, title, and lines: activity, quantity, rate |
+| Measurement | PM | Work measured on a line; never more than the ordered quantity in total |
+| Bill | Accounts | Covers all measured work not yet billed; gross = quantity × rate, less retention (default 5%) |
+| Payment | Accounts | Amount, date, mode, reference; never more than what is payable |
+
+A work order can be cancelled only before any work is measured. When every line is fully measured it shows as "Fully measured". Rates, bills and payments are cost data: Owner, Accounts and the project's PM see them; nobody else can even open a work order.
+

@@ -10,7 +10,7 @@ Railway deploys automatically from a GitHub branch on every push. Nothing here n
    If the repo is not listed, click **Configure GitHub App** and give Railway access to it.
 2. **Set the branch.** Open the new service → **Settings** → **Source** → **Branch** → choose `claude/laughing-cori-3gm0z2`. Leave "Wait for CI" off.
 3. **Add Postgres.** In the project canvas click **+ New** → **Database** → **Add PostgreSQL**.
-4. **Add a volume for uploads.** Click **+ New** → **Volume**, attach it to the app service, and set the mount path to `/data`.
+4. **Add a volume for uploads.** Click **+ New** → **Volume**, attach it to the app service, and set the mount path to `/data`. The same volume holds site photos and project documents (drawings, agreements, handover files).
 5. **Set variables** on the app service → **Variables** → **New Variable**:
 
    | Name | Value |

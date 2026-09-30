@@ -24,7 +24,7 @@ import type { FieldDef } from "@/lib/forms";
 import { projectFormFields } from "../project-fields";
 
 /** Milestones already shipped: a locked tile below this line is about the role, not about the build. */
-const BUILT_UP_TO = 5;
+const BUILT_UP_TO = 6;
 
 interface Tile { label: string; icon: NavIcon; milestone: number; href?: (id: string, role: string) => string | null }
 const TILES: Tile[] = [
@@ -36,7 +36,9 @@ const TILES: Tile[] = [
   { label: "Quality", icon: "quality", milestone: 5, href: (id, role) => (["OWNER", "PROJECT_MANAGER", "SITE_ENGINEER", "QUALITY_ENGINEER"].includes(role) ? `/quality?project=${id}` : null) },
   { label: "Issues", icon: "issues", milestone: 6, href: (id) => `/issues?project=${id}` },
   { label: "Payments", icon: "payments", milestone: 4, href: (_id, role) => (["OWNER", "ACCOUNTS"].includes(role) ? "/payables" : null) },
-  { label: "Documents", icon: "documents", milestone: 6 },
+  { label: "Documents", icon: "documents", milestone: 6, href: (id) => `/documents?project=${id}` },
+  { label: "Equipment", icon: "projects", milestone: 6, href: (id, role) => (["OWNER", "PROJECT_MANAGER"].includes(role) ? `/equipment?project=${id}` : null) },
+  { label: "Work orders", icon: "billing", milestone: 6, href: (id, role) => (["OWNER", "PROJECT_MANAGER", "ACCOUNTS"].includes(role) ? `/work-orders?project=${id}` : null) },
 ];
 
 const STORAGE_FIELDS: FieldDef[] = [
@@ -163,7 +165,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
         <ul className="grid grid-cols-2 gap-3 md:grid-cols-3">
           {TILES.map((t) => {
             const target = t.href ? t.href(id, ctx.role) : null;
-            const allowed = t.label === "Planning" ? canPlan : t.label === "Materials" ? can(ctx, "read", "inventory", id) : t.label === "Issues" ? can(ctx, "read", "issue", id) : true;
+            const allowed = t.label === "Planning" ? canPlan : t.label === "Materials" ? can(ctx, "read", "inventory", id) : t.label === "Issues" ? can(ctx, "read", "issue", id) : t.label === "Documents" ? can(ctx, "read", "document", id) : true;
             const live = !!target && allowed;
             const body = (
               <>

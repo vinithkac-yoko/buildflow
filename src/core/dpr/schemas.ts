@@ -43,6 +43,8 @@ export const issueInput = z.object({
   title: z.string().trim().min(3, "Describe the issue in a few words.").max(160, "Keep the title short."),
   severity: z.enum(SEVERITIES, { errorMap: () => ({ message: "Pick how serious it is." }) }),
   activityId: z.string().min(1).nullish(),
+  description: z.string().trim().max(1000, "Keep the description under 1000 characters.").nullish(),
+  targetResolutionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a valid date.").nullish(),
   clientTxnId: z.string().min(8).max(64).nullish(),
 });
 export type IssueInput = z.infer<typeof issueInput>;

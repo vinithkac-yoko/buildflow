@@ -65,21 +65,31 @@ model User {
   sessions        Session[]
   assignments     ProjectAssignment[]
   auditLogs       AuditLog[]
-  managedProjects Project[]           @relation("ProjectCreator")
-  createdClients  Client[]            @relation("ClientCreator")
-  dprsCreated     Dpr[]               @relation("DprCreator")
-  dprsSubmitted   Dpr[]               @relation("DprSubmitter")
-  dprsApproved    Dpr[]               @relation("DprApprover")
-  issuesReported  Issue[]             @relation("IssueReporter")
-  mrRequested     MaterialRequest[]   @relation("MrRequester")
-  mrDecided       MaterialRequest[]   @relation("MrDecider")
-  prRaised        PurchaseRequest[]   @relation("PrRaiser")
-  poRaised        PurchaseOrder[]     @relation("PoRaiser")
-  grnReceived     MaterialReceipt[]   @relation("GrnReceiver")
-  inspRequested   QualityInspection[] @relation("InspRequester")
-  inspDone        QualityInspection[] @relation("InspInspector")
-  ncrRaised       Ncr[]               @relation("NcrRaiser")
-  ncrActions      NcrAction[]         @relation("NcrActor")
+  managedProjects Project[]              @relation("ProjectCreator")
+  createdClients  Client[]               @relation("ClientCreator")
+  dprsCreated     Dpr[]                  @relation("DprCreator")
+  dprsSubmitted   Dpr[]                  @relation("DprSubmitter")
+  dprsApproved    Dpr[]                  @relation("DprApprover")
+  issuesReported  Issue[]                @relation("IssueReporter")
+  mrRequested     MaterialRequest[]      @relation("MrRequester")
+  mrDecided       MaterialRequest[]      @relation("MrDecider")
+  prRaised        PurchaseRequest[]      @relation("PrRaiser")
+  poRaised        PurchaseOrder[]        @relation("PoRaiser")
+  grnReceived     MaterialReceipt[]      @relation("GrnReceiver")
+  inspRequested   QualityInspection[]    @relation("InspRequester")
+  inspDone        QualityInspection[]    @relation("InspInspector")
+  ncrRaised       Ncr[]                  @relation("NcrRaiser")
+  ncrActions      NcrAction[]            @relation("NcrActor")
+  delaysRecorded  Delay[]                @relation("DelayRecorder")
+  docsUploaded    Document[]             @relation("DocUploader")
+  docsDecided     Document[]             @relation("DocDecider")
+  docVersions     DocumentVersion[]      @relation("DocVersionUploader")
+  eqAssigned      EquipmentAssignment[]  @relation("EqAssigner")
+  eqLogged        EquipmentLog[]         @relation("EqLogger")
+  woIssued        WorkOrder[]            @relation("WoIssuer")
+  woMeasured      WorkOrderMeasurement[] @relation("WoMeasurer")
+  subBillsEntered SubcontractorBill[]    @relation("SubBillEnterer")
+  subPaid         SubcontractorPayment[] @relation("SubPayer")
 
   @@index([role])
 }
@@ -171,24 +181,31 @@ model Project {
   createdById    String?
   createdBy      User?         @relation("ProjectCreator", fields: [createdById], references: [id])
 
-  assignments      ProjectAssignment[]
-  dprs             Dpr[]
-  issues           Issue[]
-  ledgerEntries    InventoryLedger[]
-  stockBalances    StockBalance[]
-  wbsNodes         WbsNode[]
-  activities       Activity[]
-  boqItems         BoqItem[]
-  boqRevisions     BoqRevision[]
-  storageLocations StorageLocation[]
-  materialRequests MaterialRequest[]
-  purchaseRequests PurchaseRequest[]
-  purchaseOrders   PurchaseOrder[]
-  receipts         MaterialReceipt[]
-  invoices         VendorInvoice[]
-  payments         VendorPayment[]
-  inspections      QualityInspection[]
-  ncrs             Ncr[]
+  assignments          ProjectAssignment[]
+  dprs                 Dpr[]
+  issues               Issue[]
+  ledgerEntries        InventoryLedger[]
+  stockBalances        StockBalance[]
+  wbsNodes             WbsNode[]
+  activities           Activity[]
+  boqItems             BoqItem[]
+  boqRevisions         BoqRevision[]
+  storageLocations     StorageLocation[]
+  materialRequests     MaterialRequest[]
+  purchaseRequests     PurchaseRequest[]
+  purchaseOrders       PurchaseOrder[]
+  receipts             MaterialReceipt[]
+  invoices             VendorInvoice[]
+  payments             VendorPayment[]
+  inspections          QualityInspection[]
+  ncrs                 Ncr[]
+  delays               Delay[]
+  documents            Document[]
+  equipmentAssignments EquipmentAssignment[]
+  equipmentLogs        EquipmentLog[]
+  workOrders           WorkOrder[]
+  subBills             SubcontractorBill[]
+  subPayments          SubcontractorPayment[]
 
   @@index([clientId])
   @@index([status])
@@ -253,9 +270,10 @@ model Uom {
   updatedAt   DateTime @updatedAt
   createdById String?
 
-  materials  Material[]
-  activities Activity[]
-  boqItems   BoqItem[]
+  materials      Material[]
+  activities     Activity[]
+  boqItems       BoqItem[]
+  workOrderItems WorkOrderItem[]
 }
 
 model MaterialCategory {
@@ -285,16 +303,20 @@ model Material {
   updatedAt        DateTime         @updatedAt
   createdById      String?
 
-  boms          MaterialBom[]
-  dprUses       DprMaterialUse[]
-  ledgerEntries InventoryLedger[]
-  stockBalances StockBalance[]
-  requestItems  MaterialRequestItem[]
-  inspections   QualityInspection[]
-  ncrs          Ncr[]
-  prItems       PurchaseRequestItem[]
-  poItems       PurchaseOrderItem[]
-  receiptItems  MaterialReceiptItem[]
+  boms                 MaterialBom[]
+  dprUses              DprMaterialUse[]
+  ledgerEntries        InventoryLedger[]
+  stockBalances        StockBalance[]
+  requestItems         MaterialRequestItem[]
+  inspections          QualityInspection[]
+  ncrs                 Ncr[]
+  delays               Delay[]
+  equipmentAssignments EquipmentAssignment[]
+  equipmentLogs        EquipmentLog[]
+  workOrderItems       WorkOrderItem[]
+  prItems              PurchaseRequestItem[]
+  poItems              PurchaseOrderItem[]
+  receiptItems         MaterialReceiptItem[]
 
   @@index([categoryId])
 }
@@ -394,6 +416,8 @@ model Subcontractor {
   labourLogs  LabourLog[]
   inspections QualityInspection[]
   ncrs        Ncr[]
+  workOrders  WorkOrder[]
+  bills       SubcontractorBill[]
 }
 
 model Equipment {
@@ -407,6 +431,9 @@ model Equipment {
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
   createdById String?
+
+  assignments EquipmentAssignment[]
+  logs        EquipmentLog[]
 }
 
 model QualityChecklist {
@@ -521,16 +548,20 @@ model Activity {
   actualStart        DateTime?      @db.Date
   actualFinish       DateTime?      @db.Date
 
-  boqLinks           ActivityBoqLink[]
-  boms               MaterialBom[]
-  dprProgress        DprActivityProgress[]
-  labourLogs         LabourLog[]
-  materialUses       DprMaterialUse[]
-  issues             Issue[]
-  ledgerEntries      InventoryLedger[]
-  requestItems       MaterialRequestItem[]
-  qualityInspections QualityInspection[]
-  ncrs               Ncr[]
+  boqLinks             ActivityBoqLink[]
+  boms                 MaterialBom[]
+  dprProgress          DprActivityProgress[]
+  labourLogs           LabourLog[]
+  materialUses         DprMaterialUse[]
+  issues               Issue[]
+  ledgerEntries        InventoryLedger[]
+  requestItems         MaterialRequestItem[]
+  qualityInspections   QualityInspection[]
+  ncrs                 Ncr[]
+  delays               Delay[]
+  equipmentAssignments EquipmentAssignment[]
+  equipmentLogs        EquipmentLog[]
+  workOrderItems       WorkOrderItem[]
 
   @@unique([projectId, code])
   @@index([projectId, status])
@@ -1264,4 +1295,293 @@ model NcrAction {
   createdAt DateTime @default(now())
 
   @@index([ncrId])
+}
+
+// ───────────── Milestone 6: delays, equipment, documents, subcontractor work orders ─────────────
+
+enum DelayCategory {
+  WEATHER
+  MATERIAL_SUPPLY
+  LABOUR_AVAILABILITY
+  DRAWING_APPROVAL
+  CLIENT_DECISION
+  SUBCONTRACTOR_PERFORMANCE
+  EQUIPMENT
+  DESIGN_CHANGE
+  QUALITY_REWORK
+  UTILITIES_PERMITS
+  OTHER
+}
+
+// A function or team, never a person: delays record causes, not blame.
+enum ResponsibleFunction {
+  SITE_EXECUTION
+  PROCUREMENT
+  DESIGN
+  PLANNING
+  QUALITY
+  CLIENT_SIDE
+  FINANCE
+  EXTERNAL_AUTHORITY
+}
+
+model Delay {
+  id                  String              @id @default(cuid())
+  code                String              @unique
+  projectId           String
+  project             Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  activityId          String?
+  activity            Activity?           @relation(fields: [activityId], references: [id], onDelete: SetNull)
+  category            DelayCategory
+  delayFactor         String
+  startDate           DateTime            @db.Date
+  endDate             DateTime?           @db.Date
+  daysLost            Int
+  criticalPathImpact  Boolean             @default(false)
+  costImpact          Decimal             @default(0) @db.Decimal(14, 2)
+  evidence            String
+  impact              String?
+  responsibleFunction ResponsibleFunction
+  correctiveAction    String?
+  recordedById        String
+  recordedBy          User                @relation("DelayRecorder", fields: [recordedById], references: [id])
+  isDemo              Boolean             @default(false)
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  material            Material?           @relation(fields: [materialId], references: [id])
+  materialId          String?
+
+  @@index([projectId])
+}
+
+enum EquipmentLogKind {
+  USAGE
+  MAINTENANCE
+  BREAKDOWN
+}
+
+model EquipmentAssignment {
+  id           String    @id @default(cuid())
+  equipmentId  String
+  equipment    Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  projectId    String
+  project      Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  activityId   String?
+  activity     Activity? @relation(fields: [activityId], references: [id], onDelete: SetNull)
+  fromDate     DateTime  @db.Date
+  toDate       DateTime? @db.Date
+  note         String?
+  assignedById String
+  assignedBy   User      @relation("EqAssigner", fields: [assignedById], references: [id])
+  isDemo       Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  material     Material? @relation(fields: [materialId], references: [id])
+  materialId   String?
+
+  @@index([equipmentId])
+  @@index([projectId])
+}
+
+model EquipmentLog {
+  id          String           @id @default(cuid())
+  equipmentId String
+  equipment   Equipment        @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  projectId   String
+  project     Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  activityId  String?
+  activity    Activity?        @relation(fields: [activityId], references: [id], onDelete: SetNull)
+  logDate     DateTime         @db.Date
+  kind        EquipmentLogKind
+  hours       Decimal          @default(0) @db.Decimal(6, 2)
+  note        String?
+  loggedById  String
+  loggedBy    User             @relation("EqLogger", fields: [loggedById], references: [id])
+  clientTxnId String?          @unique
+  isDemo      Boolean          @default(false)
+  createdAt   DateTime         @default(now())
+  material    Material?        @relation(fields: [materialId], references: [id])
+  materialId  String?
+
+  @@index([equipmentId, logDate])
+  @@index([projectId])
+}
+
+enum DocumentCategory {
+  AGREEMENT
+  BOQ
+  DRAWINGS
+  DPR
+  PURCHASE_ORDERS
+  INVOICES
+  QUALITY
+  PAYMENT
+  HANDOVER
+  PHOTOS
+}
+
+// UPLOADED → APPROVED or REJECTED (PM/Owner) → RELEASED (visible to the client). A new version resets it to UPLOADED.
+enum DocumentStatus {
+  UPLOADED
+  APPROVED
+  REJECTED
+  RELEASED
+}
+
+model Document {
+  id             String           @id @default(cuid())
+  code           String           @unique
+  projectId      String
+  project        Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  category       DocumentCategory
+  title          String
+  status         DocumentStatus   @default(UPLOADED)
+  statusNote     String?
+  decidedById    String?
+  decidedBy      User?            @relation("DocDecider", fields: [decidedById], references: [id])
+  decidedAt      DateTime?
+  releasedAt     DateTime?
+  currentVersion Int              @default(1)
+  uploadedById   String
+  uploadedBy     User             @relation("DocUploader", fields: [uploadedById], references: [id])
+  isDemo         Boolean          @default(false)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  versions DocumentVersion[]
+
+  @@index([projectId, category])
+}
+
+// A new upload supersedes the previous version: only the latest is CURRENT (a partial unique index enforces it); old ones stay viewable.
+model DocumentVersion {
+  id           String   @id @default(cuid())
+  documentId   String
+  document     Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  version      Int
+  fileKey      String
+  fileName     String
+  mimeType     String
+  sizeBytes    Int
+  isCurrent    Boolean  @default(true)
+  note         String?
+  uploadedById String
+  uploadedBy   User     @relation("DocVersionUploader", fields: [uploadedById], references: [id])
+  isDemo       Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  @@unique([documentId, version])
+}
+
+enum WorkOrderStatus {
+  ISSUED
+  COMPLETED
+  CANCELLED
+}
+
+model WorkOrder {
+  id              String          @id @default(cuid())
+  code            String          @unique
+  projectId       String
+  project         Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  subcontractorId String
+  subcontractor   Subcontractor   @relation(fields: [subcontractorId], references: [id])
+  title           String
+  scope           String?
+  status          WorkOrderStatus @default(ISSUED)
+  issuedOn        DateTime        @db.Date
+  issuedById      String
+  issuedBy        User            @relation("WoIssuer", fields: [issuedById], references: [id])
+  cancelReason    String?
+  isDemo          Boolean         @default(false)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  items WorkOrderItem[]
+  bills SubcontractorBill[]
+
+  @@index([projectId, status])
+}
+
+model WorkOrderItem {
+  id          String    @id @default(cuid())
+  workOrderId String
+  workOrder   WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  activityId  String
+  activity    Activity  @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  description String
+  uomId       String
+  uom         Uom       @relation(fields: [uomId], references: [id])
+  quantity    Decimal   @db.Decimal(14, 3)
+  workRate    Decimal   @db.Decimal(14, 2)
+  measuredQty Decimal   @default(0) @db.Decimal(14, 3)
+
+  measurements WorkOrderMeasurement[]
+  material     Material?              @relation(fields: [materialId], references: [id])
+  materialId   String?
+}
+
+model WorkOrderMeasurement {
+  id           String             @id @default(cuid())
+  itemId       String
+  item         WorkOrderItem      @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  measuredOn   DateTime           @db.Date
+  quantity     Decimal            @db.Decimal(14, 3)
+  note         String?
+  measuredById String
+  measuredBy   User               @relation("WoMeasurer", fields: [measuredById], references: [id])
+  billId       String?
+  bill         SubcontractorBill? @relation(fields: [billId], references: [id], onDelete: SetNull)
+  clientTxnId  String?            @unique
+  isDemo       Boolean            @default(false)
+  createdAt    DateTime           @default(now())
+
+  @@index([itemId])
+}
+
+model SubcontractorBill {
+  id              String        @id @default(cuid())
+  code            String        @unique
+  workOrderId     String
+  workOrder       WorkOrder     @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  projectId       String
+  project         Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  subcontractorId String
+  subcontractor   Subcontractor @relation(fields: [subcontractorId], references: [id])
+  billNo          String
+  billDate        DateTime      @db.Date
+  dueDate         DateTime?     @db.Date
+  billGross       Decimal       @db.Decimal(16, 2)
+  retentionPct    Decimal       @default(5) @db.Decimal(5, 2)
+  billRetention   Decimal       @db.Decimal(16, 2)
+  billNet         Decimal       @db.Decimal(16, 2)
+  billPaid        Decimal       @default(0) @db.Decimal(16, 2)
+  status          InvoiceStatus @default(UNPAID)
+  enteredById     String
+  enteredBy       User          @relation("SubBillEnterer", fields: [enteredById], references: [id])
+  isDemo          Boolean       @default(false)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  measurements WorkOrderMeasurement[]
+  payments     SubcontractorPayment[]
+
+  @@unique([subcontractorId, billNo])
+  @@index([projectId, status])
+}
+
+model SubcontractorPayment {
+  id               String            @id @default(cuid())
+  code             String            @unique
+  billId           String
+  bill             SubcontractorBill @relation(fields: [billId], references: [id], onDelete: Cascade)
+  projectId        String
+  project          Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  paidOn           DateTime          @db.Date
+  subPaymentAmount Decimal           @db.Decimal(16, 2)
+  mode             PaymentMode
+  reference        String?
+  paidById         String
+  paidBy           User              @relation("SubPayer", fields: [paidById], references: [id])
+  isDemo           Boolean           @default(false)
+  createdAt        DateTime          @default(now())
 }

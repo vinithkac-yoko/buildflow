@@ -37,7 +37,7 @@ export async function listIssues(ctx: Ctx, f: { projectId?: string; status?: Iss
   return rows
     .filter((r) => ctx.allProjects || allowed.has(r.projectId))
     .map((r) => ({
-      id: r.id, code: r.code, projectId: r.projectId, projectCode: r.project.code, projectName: r.project.name, title: r.title, severity: r.severity, status: r.status,
+      id: r.id, code: r.code, projectId: r.projectId, projectCode: r.project.code, projectName: r.project.name, title: r.title, description: r.description, severity: r.severity, status: r.status,
       activity: r.activity ? `${r.activity.code} ${r.activity.name}` : null, reportedBy: r.reportedBy.name, createdAt: r.createdAt.toISOString(),
       target: r.targetResolutionDate ? dateKey(r.targetResolutionDate) : null, resolvedAt: r.resolvedAt?.toISOString() ?? null,
     }))
@@ -60,6 +60,21 @@ export async function updateIssueStatus(ctx: Ctx, issueId: string, to: IssueStat
     await writeAudit(tx, ctx, {
       action: "STATUS_CHANGE", entity: "Issue", entityId: issueId, projectId: i.projectId, activityId: i.activityId,
       before: { status: i.status }, after: { status: to },
+    });
+  });
+}
+
+/** The PM sets or changes when an issue should be resolved by. */
+export async function setIssueTarget(ctx: Ctx, issueId: string, date: string | null) {
+  if (date !== null && !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw conflict("Pick a valid date.");
+  return db.$transaction(async (tx) => {
+    const i = await tx.issue.findUnique({ where: { id: issueId } });
+    if (!i) throw notFound("That issue");
+    assertCan(ctx, "update", "issue", i.projectId);
+    await tx.issue.update({ where: { id: issueId }, data: { targetResolutionDate: date ? new Date(`${date}T00:00:00.000Z`) : null } });
+    await writeAudit(tx, ctx, {
+      action: "UPDATE", entity: "Issue", entityId: issueId, projectId: i.projectId, activityId: i.activityId,
+      before: { target: i.targetResolutionDate ? dateKey(i.targetResolutionDate) : null }, after: { target: date },
     });
   });
 }

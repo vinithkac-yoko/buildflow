@@ -11,6 +11,7 @@ import { DEMO_ACCOUNTS, DEMO_PASSWORD } from "../../lib/demo-accounts";
 import { ensureSequenceAtLeast } from "../common";
 import { istToday } from "../dates";
 import { seedHistory, type HistoryAct } from "./history";
+import { seedOps } from "./ops";
 import { seedProcurement } from "./procurement";
 import { seedQuality } from "./quality";
 import { solveFront } from "./solver";
@@ -20,7 +21,7 @@ import {
 } from "./data";
 
 /** Bump when the demo data shape changes so deployed demos refresh themselves. */
-export const SEED_VERSION = 5;
+export const SEED_VERSION = 6;
 const META_KEY = "demoSeedVersion";
 
 type Tx = Prisma.TransactionClient;
@@ -426,6 +427,7 @@ async function seedAll(tx: Tx) {
   }
   await seedProcurement(tx, { today, now: new Date(), ownerId, userIds, materialIds: refs.material, projects: procurementProjects });
   await seedQuality(tx, { today, now: new Date(), userIds, projects: procurementProjects });
+  await seedOps(tx, { today, now: new Date(), userIds, projects: procurementProjects });
   await ensureSequenceAtLeast(tx, "CLI", n);
   await ensureSequenceAtLeast(tx, "PRJ", n);
   await tx.appMeta.upsert({ where: { key: META_KEY }, create: { key: META_KEY, value: String(SEED_VERSION) }, update: { value: String(SEED_VERSION) } });
@@ -436,6 +438,7 @@ async function seedAll(tx: Tx) {
 export async function resetDemo(client: PrismaClient) {
   // Uploaded demo photos live on disk; remember them so the files can go once the database change has committed.
   const photos = await client.dprPhoto.findMany({ where: { isDemo: true }, select: { projectId: true, fileKey: true } });
+  const docFiles = await client.documentVersion.findMany({ where: { isDemo: true }, select: { fileKey: true, document: { select: { projectId: true } } } });
   const result = await client.$transaction(
     async (tx) => {
       await wipeDemo(tx);
@@ -445,6 +448,7 @@ export async function resetDemo(client: PrismaClient) {
   );
   const root = path.resolve(process.env.UPLOAD_DIR ?? "./.uploads");
   await Promise.all(photos.map((p) => rm(path.join(root, "dpr", p.projectId, p.fileKey), { force: true })));
+  await Promise.all(docFiles.map((d) => rm(path.join(root, "documents", d.document.projectId, d.fileKey), { force: true })));
   return result;
 }
 

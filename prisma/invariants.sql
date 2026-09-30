@@ -55,3 +55,22 @@ ALTER TABLE "QualityInspection" ADD CONSTRAINT inspection_counts_valid    CHECK 
 ALTER TABLE "QualityInspection" ADD CONSTRAINT inspection_completed_valid CHECK (status = 'REQUESTED' OR (result IS NOT NULL AND "inspectionDate" IS NOT NULL AND "totalCheckpoints" > 0));
 ALTER TABLE "Ncr"               ADD CONSTRAINT ncr_amounts_valid          CHECK ("reworkLabourCost" >= 0 AND "reworkMaterialCost" >= 0 AND "timeLostDays" >= 0);
 ALTER TABLE "Ncr"               ADD CONSTRAINT ncr_closed_valid           CHECK ((status = 'CLOSED') = ("closedAt" IS NOT NULL));
+
+-- ═════════════════ Part 4 — delays, equipment, documents, work orders (milestone 6; applied by the *_ops migration) ═════════════════
+
+-- A delay's dates and cost are never impossible. Equipment hours fit in a day, and a piece of equipment sits on
+-- one project at a time (only one open assignment).
+ALTER TABLE "Delay"               ADD CONSTRAINT delay_valid                CHECK ("daysLost" >= 0 AND "costImpact" >= 0 AND ("endDate" IS NULL OR "endDate" >= "startDate"));
+ALTER TABLE "EquipmentAssignment" ADD CONSTRAINT assignment_dates_valid     CHECK ("toDate" IS NULL OR "toDate" >= "fromDate");
+CREATE UNIQUE INDEX equipment_one_open_assignment ON "EquipmentAssignment" ("equipmentId") WHERE "toDate" IS NULL;
+ALTER TABLE "EquipmentLog"        ADD CONSTRAINT equipment_hours_valid      CHECK (hours >= 0 AND hours <= 24 AND (kind <> 'USAGE' OR hours > 0));
+
+-- Only the latest version of a document is CURRENT; versions are numbered from 1.
+ALTER TABLE "DocumentVersion"     ADD CONSTRAINT document_version_valid     CHECK (version >= 1 AND "sizeBytes" > 0);
+CREATE UNIQUE INDEX document_one_current_version ON "DocumentVersion" ("documentId") WHERE "isCurrent";
+
+-- Work orders: a line can never be measured beyond its ordered quantity; bills add up; a bill can never be paid beyond what is payable.
+ALTER TABLE "WorkOrderItem"       ADD CONSTRAINT work_item_valid            CHECK (quantity > 0 AND "workRate" >= 0 AND "measuredQty" >= 0 AND "measuredQty" <= quantity);
+ALTER TABLE "WorkOrderMeasurement" ADD CONSTRAINT measurement_qty_positive  CHECK (quantity > 0);
+ALTER TABLE "SubcontractorBill"   ADD CONSTRAINT sub_bill_amounts_valid     CHECK ("billGross" >= 0 AND "billRetention" >= 0 AND "billNet" = "billGross" - "billRetention" AND "billPaid" >= 0 AND "billPaid" <= "billNet" AND "retentionPct" >= 0 AND "retentionPct" <= 100);
+ALTER TABLE "SubcontractorPayment" ADD CONSTRAINT sub_payment_positive      CHECK ("subPaymentAmount" > 0);

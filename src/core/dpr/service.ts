@@ -375,6 +375,7 @@ export async function addIssue(ctx: Ctx, projectId: string, raw: unknown) {
     const issue = await tx.issue.create({
       data: {
         code, projectId, activityId: i.activityId ?? null, dprId: dpr?.id ?? null, title: i.title, severity: i.severity,
+        description: i.description || null, targetResolutionDate: i.targetResolutionDate ? new Date(`${i.targetResolutionDate}T00:00:00.000Z`) : null,
         reportedById: ctx.userId, clientTxnId: i.clientTxnId ?? null, ...demoFlag(),
       },
     });
