@@ -54,7 +54,7 @@ export async function toResult<T>(run: () => Promise<T>, what = "record"): Promi
       }
       return failure(e.issues[0]?.message ?? "Check the highlighted fields.", fieldErrors);
     }
-    if (e instanceof AppError) return failure(e.message);
+    if (e instanceof AppError) return failure(e.message, e.fieldErrors);
     const friendly = friendlyDbError(e, what);
     if (friendly) return failure(friendly.message);
     console.error(e);

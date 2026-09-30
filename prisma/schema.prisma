@@ -67,6 +67,10 @@ model User {
   auditLogs       AuditLog[]
   managedProjects Project[]           @relation("ProjectCreator")
   createdClients  Client[]            @relation("ClientCreator")
+  dprsCreated     Dpr[]               @relation("DprCreator")
+  dprsSubmitted   Dpr[]               @relation("DprSubmitter")
+  dprsApproved    Dpr[]               @relation("DprApprover")
+  issuesReported  Issue[]             @relation("IssueReporter")
 
   @@index([role])
 }
@@ -159,6 +163,10 @@ model Project {
   createdBy      User?         @relation("ProjectCreator", fields: [createdById], references: [id])
 
   assignments      ProjectAssignment[]
+  dprs             Dpr[]
+  issues           Issue[]
+  ledgerEntries    InventoryLedger[]
+  stockBalances    StockBalance[]
   wbsNodes         WbsNode[]
   activities       Activity[]
   boqItems         BoqItem[]
@@ -260,7 +268,10 @@ model Material {
   updatedAt        DateTime         @updatedAt
   createdById      String?
 
-  boms MaterialBom[]
+  boms          MaterialBom[]
+  dprUses       DprMaterialUse[]
+  ledgerEntries InventoryLedger[]
+  stockBalances StockBalance[]
 
   @@index([categoryId])
 }
@@ -289,6 +300,7 @@ model Trade {
   employees      Employee[]
   gangs          ContractLabourGang[]
   subcontractors Subcontractor[]
+  labourLogs     LabourLog[]
 }
 
 model Employee {
@@ -351,6 +363,8 @@ model Subcontractor {
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
   createdById String?
+
+  labourLogs LabourLog[]
 }
 
 model Equipment {
@@ -417,6 +431,9 @@ model StorageLocation {
   updatedAt   DateTime    @updatedAt
   createdById String?
 
+  ledgerEntries InventoryLedger[]
+  stockBalances StockBalance[]
+
   @@unique([projectId, name])
 }
 
@@ -467,9 +484,19 @@ model Activity {
   createdAt          DateTime       @default(now())
   updatedAt          DateTime       @updatedAt
   createdById        String?
+  // Cumulative results, updated in the same transaction as each DPR approval.
+  actualQty          Decimal        @default(0) @db.Decimal(14, 3)
+  actualMandays      Decimal        @default(0) @db.Decimal(12, 2)
+  actualStart        DateTime?      @db.Date
+  actualFinish       DateTime?      @db.Date
 
-  boqLinks ActivityBoqLink[]
-  boms     MaterialBom[]
+  boqLinks      ActivityBoqLink[]
+  boms          MaterialBom[]
+  dprProgress   DprActivityProgress[]
+  labourLogs    LabourLog[]
+  materialUses  DprMaterialUse[]
+  issues        Issue[]
+  ledgerEntries InventoryLedger[]
 
   @@unique([projectId, code])
   @@index([projectId, status])
@@ -553,4 +580,240 @@ model MaterialBom {
   updatedAt   DateTime @updatedAt
 
   @@unique([activityId, materialId])
+}
+
+// ─── Daily operations: DPR, labour, material use, photos, issues ──────
+
+enum DprStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+enum Weather {
+  SUNNY
+  CLOUDY
+  RAIN
+  HEAVY_RAIN
+}
+
+enum LabourSource {
+  COMPANY_EMPLOYEE
+  CONTRACT_LABOUR
+  PIECE_RATE
+  SUBCONTRACTOR
+}
+
+enum LedgerType {
+  OPENING_STOCK
+  PO_RECEIPT
+  TRANSFER_IN
+  TRANSFER_OUT
+  ACTIVITY_ISSUE
+  ACTIVITY_RETURN
+  WASTAGE
+  THEFT_LOSS
+}
+
+enum IssueSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum IssueStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+// One DPR per project per day (UNIQUE below). Stock and progress post on APPROVAL.
+model Dpr {
+  id              String    @id @default(cuid())
+  projectId       String
+  project         Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  reportDate      DateTime  @db.Date
+  status          DprStatus @default(DRAFT)
+  weather         Weather?
+  remarks         String?
+  noWork          Boolean   @default(false)
+  createdById     String
+  createdBy       User      @relation("DprCreator", fields: [createdById], references: [id])
+  submittedById   String?
+  submittedBy     User?     @relation("DprSubmitter", fields: [submittedById], references: [id])
+  submittedAt     DateTime?
+  approvedById    String?
+  approvedBy      User?     @relation("DprApprover", fields: [approvedById], references: [id])
+  approvedAt      DateTime?
+  rejectedAt      DateTime?
+  rejectionReason String?
+  clientTxnId     String?   @unique
+  isDemo          Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  progress  DprActivityProgress[]
+  labour    LabourLog[]
+  materials DprMaterialUse[]
+  photos    DprPhoto[]
+  issues    Issue[]
+
+  @@unique([projectId, reportDate])
+  @@index([projectId, status])
+  @@index([reportDate])
+}
+
+model DprActivityProgress {
+  id          String   @id @default(cuid())
+  dprId       String
+  dpr         Dpr      @relation(fields: [dprId], references: [id], onDelete: Cascade)
+  projectId   String
+  activityId  String
+  activity    Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  quantity    Decimal  @db.Decimal(14, 3)
+  location    String?
+  enteredById String
+  createdAt   DateTime @default(now())
+
+  @@unique([dprId, activityId, enteredById])
+  @@index([projectId, activityId])
+}
+
+model LabourLog {
+  id              String         @id @default(cuid())
+  dprId           String
+  dpr             Dpr            @relation(fields: [dprId], references: [id], onDelete: Cascade)
+  projectId       String
+  activityId      String?
+  activity        Activity?      @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  source          LabourSource
+  tradeId         String
+  trade           Trade          @relation(fields: [tradeId], references: [id])
+  subcontractorId String?
+  subcontractor   Subcontractor? @relation(fields: [subcontractorId], references: [id])
+  headcount       Int
+  hours           Decimal        @db.Decimal(5, 2)
+  mandays         Decimal        @db.Decimal(10, 3)
+  dailyLabourCost Decimal        @default(0) @db.Decimal(14, 2)
+  enteredById     String
+  clientTxnId     String?        @unique
+  createdAt       DateTime       @default(now())
+
+  @@index([projectId, activityId])
+  @@index([dprId])
+}
+
+model DprMaterialUse {
+  id          String   @id @default(cuid())
+  dprId       String
+  dpr         Dpr      @relation(fields: [dprId], references: [id], onDelete: Cascade)
+  projectId   String
+  activityId  String
+  activity    Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  materialId  String
+  material    Material @relation(fields: [materialId], references: [id])
+  quantity    Decimal  @db.Decimal(14, 3)
+  enteredById String
+  createdAt   DateTime @default(now())
+
+  @@unique([dprId, activityId, materialId, enteredById])
+  @@index([projectId, materialId])
+}
+
+model DprPhoto {
+  id            String   @id @default(cuid())
+  dprId         String
+  dpr           Dpr      @relation(fields: [dprId], references: [id], onDelete: Cascade)
+  projectId     String
+  fileKey       String   @unique
+  originalName  String
+  mimeType      String
+  sizeBytes     Int
+  caption       String?
+  // Visible to the Client only when the PM marks it.
+  clientVisible Boolean  @default(false)
+  uploadedById  String
+  clientTxnId   String?  @unique
+  isDemo        Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  @@index([dprId])
+  @@index([projectId, createdAt])
+}
+
+model Issue {
+  id                   String        @id @default(cuid())
+  code                 String        @unique
+  projectId            String
+  project              Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  activityId           String?
+  activity             Activity?     @relation(fields: [activityId], references: [id], onDelete: NoAction)
+  dprId                String?
+  dpr                  Dpr?          @relation(fields: [dprId], references: [id])
+  title                String
+  description          String?
+  severity             IssueSeverity
+  status               IssueStatus   @default(OPEN)
+  targetResolutionDate DateTime?     @db.Date
+  resolvedAt           DateTime?
+  reportedById         String
+  reportedBy           User          @relation("IssueReporter", fields: [reportedById], references: [id])
+  clientTxnId          String?       @unique
+  isDemo               Boolean       @default(false)
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  @@index([projectId, status])
+  @@index([severity, status])
+}
+
+// ─── Inventory (project-wise, per storage location) ───────────────────
+
+// Append-only. Direction comes from the type: OPENING_STOCK, PO_RECEIPT, TRANSFER_IN and ACTIVITY_RETURN add;
+// TRANSFER_OUT, ACTIVITY_ISSUE, WASTAGE and THEFT_LOSS remove. Enforced by triggers in prisma/invariants.sql.
+model InventoryLedger {
+  id                String          @id @default(cuid())
+  projectId         String
+  project           Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  storageLocationId String
+  storageLocation   StorageLocation @relation(fields: [storageLocationId], references: [id], onDelete: Cascade)
+  materialId        String
+  material          Material        @relation(fields: [materialId], references: [id])
+  type              LedgerType
+  quantity          Decimal         @db.Decimal(14, 3)
+  unitCost          Decimal         @default(0) @db.Decimal(14, 2)
+  activityId        String?
+  activity          Activity?       @relation(fields: [activityId], references: [id], onDelete: NoAction)
+  dprId             String?
+  refType           String?
+  refId             String?
+  note              String?
+  createdById       String
+  clientTxnId       String?         @unique
+  isDemo            Boolean         @default(false)
+  createdAt         DateTime        @default(now())
+
+  @@index([projectId, materialId, createdAt])
+  @@index([dprId])
+}
+
+// Materialised running balance, updated in the same transaction as each ledger row.
+// CHECK (quantity >= 0) in prisma/invariants.sql makes negative stock impossible.
+model StockBalance {
+  id                String          @id @default(cuid())
+  projectId         String
+  project           Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  storageLocationId String
+  storageLocation   StorageLocation @relation(fields: [storageLocationId], references: [id], onDelete: Cascade)
+  materialId        String
+  material          Material        @relation(fields: [materialId], references: [id])
+  quantity          Decimal         @db.Decimal(14, 3)
+  avgCost           Decimal         @default(0) @db.Decimal(14, 2)
+  updatedAt         DateTime        @updatedAt
+
+  @@unique([projectId, storageLocationId, materialId])
+  @@index([projectId, materialId])
 }
