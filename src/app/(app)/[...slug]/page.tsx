@@ -16,7 +16,7 @@ export default async function PlaceholderPage({ params }: { params: Promise<{ sl
       <Card className="flex items-start gap-3">
         <CalendarClock className="mt-0.5 h-5 w-5 shrink-0 text-planned" aria-hidden />
         <div>
-          <p className="font-medium">Coming in a later release.</p>
+          <p className="font-medium">Not available yet.</p>
           <p className="text-muted">{item.blurb}</p>
         </div>
       </Card>
