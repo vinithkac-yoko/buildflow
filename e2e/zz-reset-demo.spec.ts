@@ -6,7 +6,7 @@ test("owner can reset demo data; demo accounts still work afterwards", async ({ 
   await page.goto("/settings");
   await page.getByRole("button", { name: /Reset demo data/ }).click();
   await page.getByRole("button", { name: "Yes, continue" }).click();
-  await expect(page).toHaveURL(/\/login/);
+  await expect(page).toHaveURL(/\/login/, { timeout: 60_000 }); // the reset rebuilds ~1,750 reports plus procurement, quality and ops data
   await login(page, "owner@buildflow.demo");
   await page.goto("/projects");
   await expect(page.getByRole("heading", { level: 2 })).toHaveCount(9);
