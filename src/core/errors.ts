@@ -16,3 +16,12 @@ export const notFound = (what = "That record") =>
   new AppError("NOT_FOUND", `${what} was not found, or you don't have access to it.`);
 export const validation = (msg: string) => new AppError("VALIDATION", msg);
 export const conflict = (msg: string) => new AppError("CONFLICT", msg);
+
+/** Result shape returned by server actions so forms can show errors next to the field. */
+export type ActionResult<T = undefined> =
+  | { ok: true; data?: T }
+  | { ok: false; error: string; fieldErrors?: Record<string, string> };
+
+export function failure(error: string, fieldErrors?: Record<string, string>): ActionResult<never> {
+  return { ok: false, error, fieldErrors };
+}

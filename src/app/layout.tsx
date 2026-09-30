@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { getSession } from "@/lib/auth";
 import { resolveTheme } from "@/lib/theme";
+import { Toaster } from "@/components/ui/toaster";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -24,6 +25,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang="en" data-theme={theme} data-sunlight={sunlight ? "on" : "off"} suppressHydrationWarning>
       <body className="relative">
         <div className="relative z-10">{children}</div>
+        <Toaster />
       </body>
     </html>
   );

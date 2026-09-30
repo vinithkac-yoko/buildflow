@@ -15,6 +15,7 @@ export const RESOURCES = [
   "receipt", "inventory", "invoice", "payment", "work_order", "sub_bill",
   "inspection", "ncr", "issue", "delay", "equipment", "document", "photo",
   "employee", "audit", "settings", "dashboard", "ask",
+  "vendor", "subcontractor", "material", "checklist", "storage_location", "sop",
 ] as const;
 export type Resource = (typeof RESOURCES)[number];
 
@@ -32,7 +33,8 @@ export const PERMISSIONS: Record<Role, PermissionMap> = {
 
   ADMIN: {
     user: ALL, assignment: ALL, master: ALL, audit: R, settings: RCU, dashboard: R,
-    client: RCU, project: RCU, wbs: R, activity: R, boq: R, equipment: RCU, employee: R,
+    client: RCU, project: ["read", "update"], wbs: R, activity: R, boq: R, equipment: RCU, employee: R,
+    vendor: RCU, subcontractor: RCU, material: RCU, checklist: RCU, storage_location: RCU, sop: RCU,
   },
 
   MARKETING: { client: RCU, dashboard: R },
@@ -43,31 +45,35 @@ export const PERMISSIONS: Record<Role, PermissionMap> = {
     purchase_request: RCU, quotation: R, purchase_order: R, receipt: R, inventory: R,
     issue: RCUD, delay: RCUD, inspection: R, ncr: R, equipment: R,
     document: RC, photo: RCU, assignment: R, dashboard: R, ask: R, master: R, client: R,
+    vendor: R, subcontractor: R, material: R, checklist: R, storage_location: RCU, sop: R,
   },
 
   SITE_ENGINEER: {
     project: R, wbs: R, activity: R, dpr: ["read", "create", "update", "submit"],
     labour: RC, material_request: RC, inventory: R, issue: RC, inspection: RC, ncr: R,
     photo: RC, document: R, dashboard: R, master: R,
+    material: R, checklist: R, sop: R, storage_location: R,
   },
 
   ACCOUNTS: {
     project: R, client: R, purchase_order: R, receipt: R, invoice: RCU, payment: RCU,
-    work_order: R, sub_bill: RCU, dashboard: R, master: R,
+    work_order: R, sub_bill: RCU, dashboard: R, master: R, vendor: R, subcontractor: R, material: R,
   },
 
   PROCUREMENT: {
     project: R, purchase_request: ["read", "update"], quotation: RCU, purchase_order: RCU,
-    receipt: RCU, inventory: R, master: RCU, dashboard: R,
+    receipt: RCU, inventory: R, master: R, dashboard: R,
+    vendor: RCU, material: RCU, subcontractor: R, storage_location: R,
   },
 
   STORE_KEEPER: {
     project: R, receipt: RC, inventory: RC, material_request: R, purchase_order: R,
-    dashboard: R, master: R,
+    dashboard: R, master: R, material: R, storage_location: RCU,
   },
 
   QUALITY_ENGINEER: {
     project: R, activity: R, inspection: RCU, ncr: RCU, photo: RC, dashboard: R, master: R,
+    checklist: RCU, sop: R, subcontractor: R,
   },
 
   HR: { employee: RCUD, master: R, dashboard: R },
@@ -138,15 +144,21 @@ export const SENSITIVE_KEYS: Readonly<Record<string, SensitiveField>> = {
   margin: "margin",
   poRate: "poRate",
   wageRate: "wage",
+  ratePerManday: "wage",
   dailyWage: "wage",
   contractValue: "contractValue",
   clientRate: "clientRate",
 };
 
+/** Pass as the scope for company-level records (materials, employees …) that belong to no single project. */
+export const COMPANY_SCOPE = "*";
+
 export function canSeeField(ctx: Ctx, field: SensitiveField, projectId?: string): boolean {
   if (!FIELD_VISIBILITY[field].includes(ctx.role)) return false;
-  // A PM's cost visibility is limited to assigned projects.
-  if (ctx.role === "PROJECT_MANAGER") return projectId !== undefined && inProjectScope(ctx, projectId);
+  // A PM's cost visibility is limited to assigned projects (company-level masters are visible to PMs).
+  if (ctx.role === "PROJECT_MANAGER") {
+    return projectId === COMPANY_SCOPE || (projectId !== undefined && inProjectScope(ctx, projectId));
+  }
   return true;
 }
 

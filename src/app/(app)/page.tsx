@@ -43,9 +43,9 @@ export default async function HomePage() {
       <Card className="flex items-start gap-3">
         <Info className="mt-0.5 h-5 w-5 shrink-0 text-planned" aria-hidden />
         <div className="text-[15px]">
-          <p className="font-medium">Milestone 1 · skeleton</p>
+          <p className="font-medium">Milestone 2 · masters</p>
           <p className="text-muted">
-            Sign-in, roles, project access and the audit log are live. Portfolio progress and the other modules arrive in later milestones.
+            Sign-in, roles, projects, planning (WBS, activities, BOQ) and all master lists are live. Daily reports, stock, quality and the portfolio view arrive in the next milestones.
           </p>
           {canListProjects && (
             <Link href="/projects" className="mt-2 inline-flex min-h-11 items-center gap-2 font-semibold text-brand-text">

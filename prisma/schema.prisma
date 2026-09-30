@@ -47,38 +47,38 @@ enum ProjectStatus {
 // ─── Identity & access ────────────────────────────────────────────────
 
 model User {
-  id              String          @id @default(cuid())
-  email           String          @unique
+  id              String           @id @default(cuid())
+  email           String           @unique
   name            String
   passwordHash    String
   role            Role
-  isActive        Boolean         @default(true)
+  isActive        Boolean          @default(true)
   themePreference ThemePreference?
   // Only set for role = CLIENT: the client whose projects this login may read.
   clientId        String?
-  client          Client?         @relation("ClientLogins", fields: [clientId], references: [id])
-  isDemo          Boolean         @default(false)
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  client          Client?          @relation("ClientLogins", fields: [clientId], references: [id])
+  isDemo          Boolean          @default(false)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
   createdById     String?
 
   sessions        Session[]
   assignments     ProjectAssignment[]
   auditLogs       AuditLog[]
-  managedProjects Project[]       @relation("ProjectCreator")
-  createdClients  Client[]        @relation("ClientCreator")
+  managedProjects Project[]           @relation("ProjectCreator")
+  createdClients  Client[]            @relation("ClientCreator")
 
   @@index([role])
 }
 
 // Server-side session row so that sessions can be revoked (logout deletes it).
 model Session {
-  id         String   @id @default(cuid())
-  userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  expiresAt  DateTime
-  userAgent  String?
-  createdAt  DateTime @default(now())
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  userAgent String?
+  createdAt DateTime @default(now())
 
   @@index([userId])
   @@index([expiresAt])
@@ -134,8 +134,8 @@ model Client {
   createdById  String?
   createdBy    User?        @relation("ClientCreator", fields: [createdById], references: [id])
 
-  projects     Project[]
-  logins       User[]       @relation("ClientLogins")
+  projects Project[]
+  logins   User[]    @relation("ClientLogins")
 }
 
 model Project {
@@ -158,8 +158,399 @@ model Project {
   createdById    String?
   createdBy      User?         @relation("ProjectCreator", fields: [createdById], references: [id])
 
-  assignments    ProjectAssignment[]
+  assignments      ProjectAssignment[]
+  wbsNodes         WbsNode[]
+  activities       Activity[]
+  boqItems         BoqItem[]
+  boqRevisions     BoqRevision[]
+  storageLocations StorageLocation[]
 
   @@index([clientId])
   @@index([status])
+}
+
+// ─── Housekeeping ─────────────────────────────────────────────────────
+
+// Human-readable code counters (PRJ-0007, MAT-0012 ...). Incremented inside the creating transaction.
+model CodeSequence {
+  key   String @id
+  value Int    @default(0)
+}
+
+model AppMeta {
+  key   String @id
+  value String
+}
+
+// ─── Enums for masters ────────────────────────────────────────────────
+
+enum ActiveStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum ActivityStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  HALTED
+  COMPLETED
+}
+
+enum EquipmentOwnership {
+  COMPANY
+  RENTAL
+  SUBCONTRACTOR
+}
+
+enum EquipmentStatus {
+  AVAILABLE
+  IN_USE
+  MAINTENANCE
+  BREAKDOWN
+}
+
+enum StorageKind {
+  MAIN_STORE
+  YARD
+  FLOOR_STORE
+  WAREHOUSE
+  OTHER
+}
+
+// ─── Masters (company-wide) ───────────────────────────────────────────
+
+model Uom {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  isDemo      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String?
+
+  materials  Material[]
+  activities Activity[]
+  boqItems   BoqItem[]
+}
+
+model MaterialCategory {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  isDemo      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String?
+
+  materials Material[]
+}
+
+model Material {
+  id               String           @id @default(cuid())
+  code             String           @unique
+  name             String
+  categoryId       String
+  category         MaterialCategory @relation(fields: [categoryId], references: [id])
+  uomId            String
+  uom              Uom              @relation(fields: [uomId], references: [id])
+  standardUnitCost Decimal          @db.Decimal(14, 2)
+  reorderThreshold Decimal          @default(0) @db.Decimal(14, 3)
+  status           ActiveStatus     @default(ACTIVE)
+  isDemo           Boolean          @default(false)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  createdById      String?
+
+  boms MaterialBom[]
+
+  @@index([categoryId])
+}
+
+model CostCode {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  isDemo      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String?
+
+  activities Activity[]
+}
+
+model Trade {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  isDemo      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String?
+
+  activities     Activity[]
+  employees      Employee[]
+  gangs          ContractLabourGang[]
+  subcontractors Subcontractor[]
+}
+
+model Employee {
+  id          String       @id @default(cuid())
+  code        String       @unique
+  name        String
+  tradeId     String?
+  trade       Trade?       @relation(fields: [tradeId], references: [id])
+  phone       String?
+  dailyWage   Decimal?     @db.Decimal(12, 2)
+  status      ActiveStatus @default(ACTIVE)
+  isDemo      Boolean      @default(false)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  createdById String?
+}
+
+model ContractLabourGang {
+  id            String       @id @default(cuid())
+  code          String       @unique
+  name          String
+  tradeId       String
+  trade         Trade        @relation(fields: [tradeId], references: [id])
+  headcount     Int          @default(0)
+  contact       String?
+  ratePerManday Decimal?     @db.Decimal(12, 2)
+  status        ActiveStatus @default(ACTIVE)
+  isDemo        Boolean      @default(false)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  createdById   String?
+}
+
+model Vendor {
+  id             String       @id @default(cuid())
+  code           String       @unique
+  name           String
+  category       String
+  contact        String?
+  status         ActiveStatus @default(ACTIVE)
+  qualityRating  Int?
+  deliveryRating Int?
+  priceRating    Int?
+  serviceRating  Int?
+  isDemo         Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  createdById    String?
+}
+
+model Subcontractor {
+  id          String       @id @default(cuid())
+  code        String       @unique
+  name        String
+  tradeId     String
+  trade       Trade        @relation(fields: [tradeId], references: [id])
+  contact     String?
+  status      ActiveStatus @default(ACTIVE)
+  isDemo      Boolean      @default(false)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  createdById String?
+}
+
+model Equipment {
+  id          String             @id @default(cuid())
+  code        String             @unique
+  name        String
+  category    String
+  ownership   EquipmentOwnership
+  status      EquipmentStatus    @default(AVAILABLE)
+  isDemo      Boolean            @default(false)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  createdById String?
+}
+
+model QualityChecklist {
+  id          String       @id @default(cuid())
+  code        String       @unique
+  name        String
+  description String?
+  status      ActiveStatus @default(ACTIVE)
+  isDemo      Boolean      @default(false)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  createdById String?
+
+  items ChecklistItem[]
+}
+
+model ChecklistItem {
+  id          String           @id @default(cuid())
+  checklistId String
+  checklist   QualityChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  seq         Int
+  text        String
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@unique([checklistId, seq])
+}
+
+model Sop {
+  id          String       @id @default(cuid())
+  code        String       @unique
+  title       String
+  body        String?
+  status      ActiveStatus @default(ACTIVE)
+  isDemo      Boolean      @default(false)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  createdById String?
+}
+
+// ─── Project structure: storage, WBS, activities, BOQ ─────────────────
+
+model StorageLocation {
+  id          String      @id @default(cuid())
+  projectId   String
+  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name        String
+  kind        StorageKind
+  isDemo      Boolean     @default(false)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  createdById String?
+
+  @@unique([projectId, name])
+}
+
+model WbsNode {
+  id          String    @id @default(cuid())
+  projectId   String
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parentId    String?
+  parent      WbsNode?  @relation("WbsTree", fields: [parentId], references: [id], onDelete: NoAction)
+  children    WbsNode[] @relation("WbsTree")
+  code        String
+  name        String
+  seq         Int       @default(0)
+  isDemo      Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  createdById String?
+
+  activities Activity[]
+
+  @@unique([projectId, code])
+  @@index([projectId, parentId])
+}
+
+model Activity {
+  id                 String         @id @default(cuid())
+  code               String
+  projectId          String
+  project            Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  wbsNodeId          String
+  wbsNode            WbsNode        @relation(fields: [wbsNodeId], references: [id])
+  costCodeId         String?
+  costCode           CostCode?      @relation(fields: [costCodeId], references: [id])
+  tradeId            String?
+  trade              Trade?         @relation(fields: [tradeId], references: [id])
+  uomId              String
+  uom                Uom            @relation(fields: [uomId], references: [id])
+  name               String
+  plannedQty         Decimal        @db.Decimal(14, 3)
+  plannedStart       DateTime       @db.Date
+  plannedFinish      DateTime       @db.Date
+  plannedMandays     Decimal        @db.Decimal(12, 2)
+  plannedCost        Decimal        @db.Decimal(16, 2)
+  targetProductivity Decimal?       @db.Decimal(12, 3)
+  criticalPath       Boolean        @default(false)
+  status             ActivityStatus @default(NOT_STARTED)
+  isDemo             Boolean        @default(false)
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  createdById        String?
+
+  boqLinks ActivityBoqLink[]
+  boms     MaterialBom[]
+
+  @@unique([projectId, code])
+  @@index([projectId, status])
+  @@index([wbsNodeId])
+}
+
+model BoqItem {
+  id                   String   @id @default(cuid())
+  projectId            String
+  project              Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  itemCode             String
+  description          String
+  uomId                String
+  uom                  Uom      @relation(fields: [uomId], references: [id])
+  originalQty          Decimal  @db.Decimal(14, 3)
+  approvedVariationQty Decimal  @default(0) @db.Decimal(14, 3)
+  clientRate           Decimal  @db.Decimal(14, 2)
+  internalBudgetRate   Decimal  @db.Decimal(14, 2)
+  isDemo               Boolean  @default(false)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  createdById          String?
+
+  activityLinks ActivityBoqLink[]
+  revisionRows  BoqItemRevision[]
+
+  @@unique([projectId, itemCode])
+}
+
+// A BOQ revision is a frozen snapshot of every item's quantities and rates.
+model BoqRevision {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  number      Int
+  note        String?
+  isDemo      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  createdById String?
+
+  rows BoqItemRevision[]
+
+  @@unique([projectId, number])
+}
+
+model BoqItemRevision {
+  id                   String      @id @default(cuid())
+  revisionId           String
+  revision             BoqRevision @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+  boqItemId            String
+  boqItem              BoqItem     @relation(fields: [boqItemId], references: [id], onDelete: Cascade)
+  originalQty          Decimal     @db.Decimal(14, 3)
+  approvedVariationQty Decimal     @db.Decimal(14, 3)
+  clientRate           Decimal     @db.Decimal(14, 2)
+  internalBudgetRate   Decimal     @db.Decimal(14, 2)
+
+  @@unique([revisionId, boqItemId])
+}
+
+model ActivityBoqLink {
+  id         String   @id @default(cuid())
+  activityId String
+  activity   Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  boqItemId  String
+  boqItem    BoqItem  @relation(fields: [boqItemId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([activityId, boqItemId])
+}
+
+// Expected material use per unit of activity quantity, with allowable wastage.
+model MaterialBom {
+  id          String   @id @default(cuid())
+  activityId  String
+  activity    Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  materialId  String
+  material    Material @relation(fields: [materialId], references: [id])
+  coefficient Decimal  @db.Decimal(14, 4)
+  wastagePct  Decimal  @default(0) @db.Decimal(5, 2)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([activityId, materialId])
 }

@@ -69,3 +69,64 @@ Sections are added as each milestone ships.
 **Who can do what.** Owner: everything. Admin: create and edit clients and projects and manage assignments. Marketing: clients only. Project Manager: update assigned projects. Everyone else with project access: read.
 
 **Every project record stores** who created it and when. Every project transaction will carry the project, the user and the time (and the activity where relevant).
+
+---
+
+## 3. Masters  *(milestone 2)*
+
+**What they are.** Company-wide reference lists. Every dropdown in the app picks from these, so people never type free text where a master exists.
+
+| List | Who manages it | Notes |
+|---|---|---|
+| Clients | Marketing, Admin, Owner | One client can have many projects |
+| Units of measure, cost codes, trades | Admin, Owner | Codes are typed once and reused |
+| Material categories, materials | Procurement, Admin, Owner | Materials carry a unit, a standard unit cost (cost data) and a reorder threshold |
+| Vendors | Procurement, Admin, Owner | Category from a fixed list; four 1–5 ratings: quality, delivery, price, service |
+| Subcontractors | Admin, Owner (others read) | Each has one trade |
+| Equipment | Admin, Owner | Ownership is Company, Rental or Subcontractor |
+| Employees, contract labour gangs | HR, Owner | Wage and rate columns are cost data |
+| Quality checklists | Quality Engineer, Admin, Owner | One checkpoint per line |
+| SOPs | Admin, Owner | Reference notes |
+
+**Rules.** Codes (MAT-0001, VEN-0001 …) are generated. A record with the same code or name as an existing one is refused with a message. Nothing is deleted; set a record to Inactive instead. Cost columns are removed for roles that may not see them, and a role that can't see a cost column can't overwrite it by editing the record.
+
+---
+
+## 4. Users and assignments  *(milestone 2)*
+
+- **Users** (Admin, Owner): create a person with a role and a temporary password, change their role, disable them (they are signed out everywhere), reset their password. Only the Owner can create or change Owner accounts. You cannot disable yourself or the last Owner. A Client login must be linked to one client.
+- **Assignments** (Admin, Owner): a person is assigned to a project to see it. Only Project Managers, Site Engineers, Store Keepers and Quality Engineers use assignments; other roles see projects by role. Assigning twice is refused. Removing someone takes the project away from them on their next click.
+
+---
+
+## 5. Projects, WBS, activities, BOQ  *(milestone 2)*
+
+**Project.** Created by the Owner in Planning status with a Main Store. Status moves along the map in section 2. Owner, Admin and the assigned PM edit its details; the contract value is editable only by roles that can see it.
+
+**WBS.** A tree per project. Top-level items are stages (Foundation, Superstructure …); activities attach to the lowest level. An item can be deleted only when it has no children and no activities.
+
+**Activity.** Belongs to a project and a WBS item. Fields: name, trade, unit, cost code, planned quantity, planned start and finish, planned labour mandays, planned cost, target productivity, critical-path flag, status. Finish cannot be before start. Planned cost is cost data.
+
+| Activity status | Can move to |
+|---|---|
+| NOT_STARTED | IN_PROGRESS, HALTED |
+| IN_PROGRESS | HALTED, COMPLETED |
+| HALTED | IN_PROGRESS |
+| COMPLETED | IN_PROGRESS (reopen) |
+
+Once daily reports arrive (milestone 3), approval will move activities along this map automatically.
+
+**BOQ.** Items have a code, description, unit, original quantity, approved variation quantity, client rate and internal budget rate. Both rates are cost data (the client rate is also visible to the Client). "Save as revision" freezes the current BOQ as revision 1, 2, 3 …. An activity can link to several BOQ items and a BOQ item to several activities.
+
+**Material BOM.** Per activity: each material with a coefficient (quantity per unit of activity quantity) and an allowable wastage %. Milestone 3/4 use it to compare actual use against standard.
+
+**Storage locations.** Per project (Main Store, Yard, Floor Store, Warehouse, Other). Stock is always held in a location.
+
+**Who can do what.** Owner: everything. PM: WBS, activities, BOQ and BOM on assigned projects. Site Engineer and Store Keeper: read the plan, with no cost columns and no BOQ. Admin: read only, no cost columns. Client and others: no access to planning.
+
+---
+
+## 6. Demo data  *(milestone 2)*
+
+Everything the seed creates is flagged DEMO and shows a DEMO badge. While the app runs in demo mode, records people create are flagged too. The Owner's **Settings → Reset demo data** button (demo mode only) deletes every DEMO record and recreates the starting data in one step; everyone is signed out and demo accounts keep the password `demo1234`.
+
