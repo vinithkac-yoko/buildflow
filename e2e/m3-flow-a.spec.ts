@@ -79,7 +79,7 @@ test.describe("Flow A — daily report to approval", () => {
     await login(pm, "pm1@buildflow.demo");
     const actualPct = async () => {
       await pm.goto("/");
-      const card = pm.locator("article", { hasText: "RS Puram" });
+      const card = pm.locator("main ul.panel > li", { hasText: "RS Puram" });
       await expect(card).toBeVisible();
       return Number((await card.getByText(/Actual/).first().innerText()).match(/([\d.]+)%/)![1]);
     };
