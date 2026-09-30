@@ -75,7 +75,7 @@ test.describe("Milestone 1 — sign-in, roles, project access", () => {
   test("logout revokes the session", async ({ page }) => {
     await login(page, "owner@buildflow.demo");
     await page.goto("/settings");
-    await page.getByRole("button", { name: /sign out/i }).click();
+    await page.getByRole("main").getByRole("button", { name: /sign out/i }).click();
     await expect(page).toHaveURL(/\/login/);
     await page.goto("/projects");
     await expect(page).toHaveURL(/\/login/);

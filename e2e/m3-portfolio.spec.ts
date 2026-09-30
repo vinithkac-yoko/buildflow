@@ -8,7 +8,7 @@ test.describe("Portfolio progress (rough cut, polished in milestone 7)", () => {
     await expect(page.getByText(/Updated from \d+ approved reports? today|No reports approved yet today/)).toBeVisible();
 
     // Three PM groups with a summary each.
-    for (const n of [1, 2, 3]) await expect(page.getByText(`Demo Project Manager ${n}`, { exact: true }).first()).toBeVisible();
+    for (const n of [1, 2, 3]) await expect(page.locator("summary", { hasText: `Demo Project Manager ${n}` })).toBeVisible();
     await expect(page.getByText(/\d sites/).first()).toBeVisible();
 
     // Every live project shows numbers, not just bars.
@@ -28,7 +28,7 @@ test.describe("Portfolio progress (rough cut, polished in milestone 7)", () => {
     await page.getByRole("link", { name: "Worst first" }).click();
     await expect(page.locator("article").first()).toContainText("Avinashi Road"); // the clearly-behind site leads
     await page.getByRole("link", { name: "All", exact: true }).click();
-    expect(await page.locator("article").count()).toBeGreaterThanOrEqual(9);
+    await expect(page.locator("article")).toHaveCount(9);
   });
 
   test("drilling into a project shows progress by stage and the S-curve, and a table alternative", async ({ page }) => {
