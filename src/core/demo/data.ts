@@ -65,6 +65,7 @@ export const VENDORS: [string, string, string, number, number, number, number][]
   ["Tiruppur Ready-Mix Concrete", "Ready-mix concrete", "+91 90000 00104", 5, 4, 3, 4],
   ["Annamalai Sanitary & CP Fittings", "Plumbing & Sanitary", "+91 90000 00105", 5, 3, 3, 5],
   ["Salem Marble & Tiles House", "Flooring & Tiles", "+91 90000 00106", 5, 4, 3, 4],
+  ["Cauvery Paints & Finishes", "Paint & Finishes", "+91 90000 00107", 4, 4, 4, 4],
 ];
 
 // name, trade, contact

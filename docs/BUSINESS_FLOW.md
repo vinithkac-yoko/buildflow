@@ -196,3 +196,38 @@ The portfolio screen is for the Owner and PMs. It is grouped by PM by default, s
 
 An issue has a title, severity (Low, Medium, High, Critical), an optional activity, and moves OPEN → IN_PROGRESS → RESOLVED → CLOSED (and can be reopened). Engineers raise them from the daily report; PMs and the Owner change their status. Critical and High open issues appear in "needs attention".
 
+---
+
+## 11. Material request to purchase order  *(milestone 4 — Flow B)*
+
+**Who does what.**
+
+| Step | Who | Result |
+|---|---|---|
+| Material request | Site Engineer (phone) | Lists materials and quantities for their project, with a "needed by" date. No prices. |
+| Convert or send back | Project Manager of that project (or Owner) | "Send to purchase" creates a **purchase request** (PR-…); "Send back" needs a reason. The request can be converted once only. |
+| Quotations | Procurement | Adds a quotation from each vendor: a rate and GST % for every material, delivery days, terms. One quotation per vendor. |
+| Choose | Procurement | Allowed only when **2 or more** quotations exist. Totals are compared with the lowest marked. |
+| Purchase order | Procurement | "Raise purchase order" copies lines, rates and GST from the chosen quotation. Code `PO-<year>-0001`. |
+
+**Cancelling.** A PO can be cancelled only while nothing has been received or invoiced; the purchase request then reopens.
+
+**Statuses.** Request: Waiting for PM → Sent to purchase (or Not approved / Cancelled). Purchase request: Getting quotations → Ordered. PO: Issued → Part received → Received (or Cancelled).
+
+## 12. Receipts and stock operations  *(milestone 4)*
+
+- **Receipt (GRN).** The Store Keeper opens a PO waiting for delivery, picks the storage location, types what actually arrived and (optionally) the challan number. A line can never receive more than is still due. Stock is posted as PO_RECEIPT at the PO rate; the PO becomes Part received or Received.
+- **Issue.** Material goes to a named activity from the chosen location, or from the Main Store first. More than the project holds is refused with the quantity in stock.
+- **Return.** Unused material goes back into a location (optionally naming the activity it came from).
+- **Transfer.** Between locations or projects; two ledger rows written together.
+- **Count adjustment.** Wastage, missing/theft, or extra found — always with a short note. Every change is a ledger line; the ledger is append-only.
+- Site engineers and clients cannot issue, return, transfer or adjust stock.
+
+## 13. Vendor invoices and payments  *(milestone 4)*
+
+- **Invoice.** Accounts enters the vendor's invoice against a PO after something has been received: number (unique per vendor), date, due date, amount before tax and tax. All invoices on a PO together cannot exceed the PO value.
+- **Payment.** Amount, date, mode (bank transfer, cheque, UPI, cash) and reference. A payment can never exceed what is still owed; the invoice becomes Part paid, then Paid.
+- **Payables screen.** Total still owed, overdue amount and paid so far; unpaid invoices first, overdue ones flagged.
+- **Visibility.** Owner and Accounts (and the PM on assigned projects) see the money side. Procurement sees PO rates only. Store Keeper, Site Engineer and Client never see rates, invoices or payments — they are removed by the service before anything reaches the screen.
+- Billing to clients and Receivables remain placeholders in Phase 1.
+

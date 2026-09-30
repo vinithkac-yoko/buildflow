@@ -5,6 +5,8 @@ import { stockForProject } from "@/core/inventory/stock";
 import { listProjects } from "@/core/projects/service";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { stockOpsData } from "@/core/procurement/options";
+import { StockOps } from "@/components/procurement/office-actions";
 import { NoAccess } from "@/components/no-access";
 import { requireSession } from "@/lib/auth";
 import { formatInr } from "@/lib/format";
@@ -20,13 +22,25 @@ export async function StockScreen({ projectId }: { projectId?: string }) {
   const stock = selected ? await stockForProject(ctx, selected.id) : [];
   const showValue = stock.some((s) => s.avgCost !== undefined);
   const low = stock.filter((s) => s.low).length;
+  const ops = selected && can(ctx, "create", "inventory", selected.id)
+    ? await stockOpsData(ctx, selected.id, projects.filter((p) => p.id !== selected.id).map((p) => ({ id: p.id, code: p.code, name: p.name })))
+    : null;
+  const canRequest = can(ctx, "create", "material_request");
+  const canSeeRequests = can(ctx, "read", "material_request");
 
   return (
     <div className="mx-auto max-w-4xl space-y-5">
       <div>
         <h1 className="text-2xl md:text-3xl">Stock</h1>
-        <p className="text-muted">Material held on each project, by storage location. Stock only changes through approved reports and recorded receipts.</p>
+        <p className="text-muted">Material held on each project, by storage location. Stock changes through recorded receipts, issues, returns, transfers and approved reports.</p>
       </div>
+      {(canRequest || canSeeRequests) && (
+        <div className="flex flex-wrap gap-2">
+          {canRequest && <Link href="/requests/new" className="inline-flex min-h-14 items-center rounded-xl bg-brand px-5 text-[17px] font-semibold text-brand-on hover:brightness-110">Request material</Link>}
+          {canSeeRequests && <Link href="/requests" className="inline-flex min-h-14 items-center rounded-xl border-2 border-border px-5 text-[17px] font-semibold hover:bg-surface-2">{canRequest ? "My requests" : "Material requests"}</Link>}
+        </div>
+      )}
+      {ops && <StockOps d={ops} />}
       {projects.length > 1 && (
         <nav aria-label="Projects" className="flex flex-wrap gap-2">
           {projects.map((p) => (

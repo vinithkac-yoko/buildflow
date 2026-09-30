@@ -63,7 +63,7 @@ export const PERMISSIONS: Record<Role, PermissionMap> = {
   PROCUREMENT: {
     project: R, purchase_request: ["read", "update"], quotation: RCU, purchase_order: RCU,
     receipt: RCU, inventory: R, master: R, dashboard: R,
-    vendor: RCU, material: RCU, subcontractor: R, storage_location: R,
+    vendor: RCU, material: RCU, subcontractor: R, storage_location: R, material_request: R, activity: R,
   },
 
   STORE_KEEPER: {
@@ -109,7 +109,7 @@ export function assertCan(ctx: Ctx, verb: Verb, resource: Resource, projectId?: 
 
 export type SensitiveField =
   | "budget" | "plannedCost" | "labourCost" | "materialCost" | "valuation"
-  | "margin" | "poRate" | "wage" | "contractValue" | "clientRate";
+  | "margin" | "poRate" | "wage" | "contractValue" | "clientRate" | "payable";
 
 /** Roles allowed to see each class of sensitive field. PM access is further limited to assigned projects. */
 export const FIELD_VISIBILITY: Record<SensitiveField, readonly Role[]> = {
@@ -123,6 +123,8 @@ export const FIELD_VISIBILITY: Record<SensitiveField, readonly Role[]> = {
   wage: ["OWNER", "PROJECT_MANAGER", "ACCOUNTS", "HR"],
   contractValue: ["OWNER", "PROJECT_MANAGER", "ACCOUNTS", "CLIENT"],
   clientRate: ["OWNER", "PROJECT_MANAGER", "ACCOUNTS", "CLIENT"],
+  // Vendor invoices, payments and what is still owed. Procurement sees PO rates but not the money side.
+  payable: ["OWNER", "PROJECT_MANAGER", "ACCOUNTS"],
 };
 
 /** Object key → sensitive field class. Add a key here whenever a new cost column is introduced. */
@@ -148,6 +150,17 @@ export const SENSITIVE_KEYS: Readonly<Record<string, SensitiveField>> = {
   dailyWage: "wage",
   contractValue: "contractValue",
   clientRate: "clientRate",
+  unitRate: "poRate",
+  poSubtotal: "poRate",
+  poTax: "poRate",
+  poTotal: "poRate",
+  lineTotal: "poRate",
+  invoiceSubtotal: "payable",
+  invoiceTax: "payable",
+  invoiceTotal: "payable",
+  paidAmount: "payable",
+  paymentAmount: "payable",
+  outstanding: "payable",
 };
 
 /** Pass as the scope for company-level records (materials, employees …) that belong to no single project. */

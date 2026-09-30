@@ -23,16 +23,19 @@ import { ROLE_LABEL, formatDate, formatInr } from "@/lib/format";
 import type { FieldDef } from "@/lib/forms";
 import { projectFormFields } from "../project-fields";
 
+/** Milestones already shipped: a locked tile below this line is about the role, not about the build. */
+const BUILT_UP_TO = 4;
+
 interface Tile { label: string; icon: NavIcon; milestone: number; href?: (id: string, role: string) => string | null }
 const TILES: Tile[] = [
   { label: "Planning", icon: "planning", milestone: 2, href: (id) => `/projects/${id}/planning` },
   { label: "Daily Reports", icon: "dpr", milestone: 3, href: (id, role) => (role === "SITE_ENGINEER" ? `/dpr/${id}` : role === "OWNER" || role === "PROJECT_MANAGER" ? `/progress?project=${id}` : null) },
   { label: "Labour", icon: "labour", milestone: 3, href: (_id, role) => (["OWNER", "PROJECT_MANAGER", "SITE_ENGINEER"].includes(role) ? "/labour" : null) },
   { label: "Materials", icon: "materials", milestone: 4, href: (id) => `/materials?project=${id}` },
-  { label: "Procurement", icon: "procurement", milestone: 4 },
+  { label: "Procurement", icon: "procurement", milestone: 4, href: (_id, role) => (["OWNER", "PROJECT_MANAGER", "PROCUREMENT"].includes(role) ? "/procurement" : ["SITE_ENGINEER", "STORE_KEEPER"].includes(role) ? (role === "STORE_KEEPER" ? "/receipts" : "/requests") : null) },
   { label: "Quality", icon: "quality", milestone: 5 },
   { label: "Issues", icon: "issues", milestone: 6, href: (id) => `/issues?project=${id}` },
-  { label: "Payments", icon: "payments", milestone: 4 },
+  { label: "Payments", icon: "payments", milestone: 4, href: (_id, role) => (["OWNER", "ACCOUNTS"].includes(role) ? "/payables" : null) },
   { label: "Documents", icon: "documents", milestone: 6 },
 ];
 
@@ -170,7 +173,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
                   {live ? (
                     <div className="text-xs text-brand-text">Open</div>
                   ) : (
-                    <div className="flex items-center gap-1 text-xs text-muted"><Lock className="h-3 w-3" aria-hidden /> Milestone {t.milestone}</div>
+                    <div className="flex items-center gap-1 text-xs text-muted"><Lock className="h-3 w-3" aria-hidden /> {t.milestone <= BUILT_UP_TO ? "Not for your role" : `Milestone ${t.milestone}`}</div>
                   )}
                 </div>
               </>

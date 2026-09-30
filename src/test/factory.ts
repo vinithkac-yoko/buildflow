@@ -57,7 +57,8 @@ export async function makeFixture(opts: { cementMain?: number; cementYard?: numb
 
   const systemCtx = { userId: owner.id, now };
   await db.$transaction(async (tx) => {
-    await postLedger(tx, systemCtx, { projectId: project.id, storageLocationId: mainStore.id, materialId: cement.id, type: "OPENING_STOCK", quantity: opts.cementMain ?? 100, unitCost: 400 });
+    if ((opts.cementMain ?? 100) > 0)
+      await postLedger(tx, systemCtx, { projectId: project.id, storageLocationId: mainStore.id, materialId: cement.id, type: "OPENING_STOCK", quantity: opts.cementMain ?? 100, unitCost: 400 });
     if ((opts.cementYard ?? 20) > 0)
       await postLedger(tx, systemCtx, { projectId: project.id, storageLocationId: yard.id, materialId: cement.id, type: "OPENING_STOCK", quantity: opts.cementYard ?? 20, unitCost: 420 });
   });

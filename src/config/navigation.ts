@@ -29,7 +29,7 @@ export const NAV: Record<Role, NavItem[]> = {
   OWNER: [
     DASH,
     PROJECTS,
-    item("Finance", "/finance", "finance", 4, "Payables, payments and cost across projects."),
+    item("Finance", "/payables", "finance", 4, "Vendor invoices, payments and what is owed."),
     item("Procurement", "/procurement", "procurement", 4, "Purchase requests, quotations and orders."),
     item("Quality", "/quality", "quality", 5, "Inspections and open NCRs across sites."),
     item("Reports", "/reports", "reports", 7, "Portfolio reports."),
@@ -60,10 +60,10 @@ export const NAV: Record<Role, NavItem[]> = {
   ],
   ACCOUNTS: [
     DASH,
-    item("Billing", "/billing", "billing", 4, "Client billing."),
-    item("Receivables", "/receivables", "receivables", 4, "Read-only placeholder in Phase 1."),
+    item("Billing", "/billing", "billing", 9, "Client billing — a read-only placeholder in Phase 1 (see decision 4)."),
+    item("Receivables", "/receivables", "receivables", 9, "Read-only placeholder in Phase 1 (see decision 4)."),
     item("Payables", "/payables", "payables", 4, "Vendor invoices, subcontractor bills and payments."),
-    item("Expenses", "/expenses", "expenses", 4, "Project expenses."),
+    item("Expenses", "/expenses", "expenses", 9, "Project expenses — placeholder in Phase 1."),
     item("Cash Flow", "/cash-flow", "cashflow", 7, "Cash position."),
     item("Reports", "/reports", "reports", 7, "Finance reports."),
   ],
@@ -88,8 +88,8 @@ export const NAV: Record<Role, NavItem[]> = {
     item("Progress", "/progress", "progress", 7, "Approved progress."),
     item("Photos", "/photos", "photos", 7, "Photos your project manager has shared."),
     item("Documents", "/documents", "documents", 6, "Released documents."),
-    item("Bills", "/bills", "bills", 4, "Bills."),
-    item("Payments", "/payments", "payments", 4, "Payments."),
+    item("Bills", "/bills", "bills", 7, "Bills."),
+    item("Payments", "/payments", "payments", 7, "Payments."),
     item("Handover", "/handover", "handover", 6, "Handover documents."),
   ],
   MARKETING: [

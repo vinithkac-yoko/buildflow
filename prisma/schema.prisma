@@ -71,6 +71,11 @@ model User {
   dprsSubmitted   Dpr[]               @relation("DprSubmitter")
   dprsApproved    Dpr[]               @relation("DprApprover")
   issuesReported  Issue[]             @relation("IssueReporter")
+  mrRequested     MaterialRequest[]   @relation("MrRequester")
+  mrDecided       MaterialRequest[]   @relation("MrDecider")
+  prRaised        PurchaseRequest[]   @relation("PrRaiser")
+  poRaised        PurchaseOrder[]     @relation("PoRaiser")
+  grnReceived     MaterialReceipt[]   @relation("GrnReceiver")
 
   @@index([role])
 }
@@ -172,6 +177,12 @@ model Project {
   boqItems         BoqItem[]
   boqRevisions     BoqRevision[]
   storageLocations StorageLocation[]
+  materialRequests MaterialRequest[]
+  purchaseRequests PurchaseRequest[]
+  purchaseOrders   PurchaseOrder[]
+  receipts         MaterialReceipt[]
+  invoices         VendorInvoice[]
+  payments         VendorPayment[]
 
   @@index([clientId])
   @@index([status])
@@ -272,6 +283,10 @@ model Material {
   dprUses       DprMaterialUse[]
   ledgerEntries InventoryLedger[]
   stockBalances StockBalance[]
+  requestItems  MaterialRequestItem[]
+  prItems       PurchaseRequestItem[]
+  poItems       PurchaseOrderItem[]
+  receiptItems  MaterialReceiptItem[]
 
   @@index([categoryId])
 }
@@ -349,6 +364,10 @@ model Vendor {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
   createdById    String?
+
+  quotations VendorQuotation[]
+  orders     PurchaseOrder[]
+  invoices   VendorInvoice[]
 }
 
 model Subcontractor {
@@ -433,6 +452,7 @@ model StorageLocation {
 
   ledgerEntries InventoryLedger[]
   stockBalances StockBalance[]
+  receipts      MaterialReceipt[]
 
   @@unique([projectId, name])
 }
@@ -497,6 +517,7 @@ model Activity {
   materialUses  DprMaterialUse[]
   issues        Issue[]
   ledgerEntries InventoryLedger[]
+  requestItems  MaterialRequestItem[]
 
   @@unique([projectId, code])
   @@index([projectId, status])
@@ -816,4 +837,291 @@ model StockBalance {
 
   @@unique([projectId, storageLocationId, materialId])
   @@index([projectId, materialId])
+}
+
+// ─── Procurement: request → quotation → order → receipt → invoice → payment ──
+
+enum RequestStatus {
+  SUBMITTED
+  CONVERTED
+  REJECTED
+  CANCELLED
+}
+
+enum PrStatus {
+  OPEN
+  ORDERED
+  CANCELLED
+}
+
+enum QuotationStatus {
+  RECEIVED
+  SELECTED
+  NOT_SELECTED
+}
+
+enum PoStatus {
+  ISSUED
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CANCELLED
+}
+
+enum InvoiceStatus {
+  UNPAID
+  PARTIALLY_PAID
+  PAID
+}
+
+enum PaymentMode {
+  BANK_TRANSFER
+  CHEQUE
+  UPI
+  CASH
+}
+
+// Raised by the site team when material is needed.
+model MaterialRequest {
+  id              String        @id @default(cuid())
+  code            String        @unique
+  projectId       String
+  project         Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  requestedById   String
+  requestedBy     User          @relation("MrRequester", fields: [requestedById], references: [id])
+  neededBy        DateTime?     @db.Date
+  note            String?
+  status          RequestStatus @default(SUBMITTED)
+  decidedById     String?
+  decidedBy       User?         @relation("MrDecider", fields: [decidedById], references: [id])
+  decidedAt       DateTime?
+  rejectionReason String?
+  clientTxnId     String?       @unique
+  isDemo          Boolean       @default(false)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  items           MaterialRequestItem[]
+  purchaseRequest PurchaseRequest?
+
+  @@index([projectId, status])
+}
+
+model MaterialRequestItem {
+  id         String          @id @default(cuid())
+  requestId  String
+  request    MaterialRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  materialId String
+  material   Material        @relation(fields: [materialId], references: [id])
+  quantity   Decimal         @db.Decimal(14, 3)
+  activityId String?
+  activity   Activity?       @relation(fields: [activityId], references: [id], onDelete: SetNull)
+
+  @@unique([requestId, materialId])
+}
+
+// The PM turns an approved need into a purchase request that Procurement can quote and order.
+model PurchaseRequest {
+  id                String           @id @default(cuid())
+  code              String           @unique
+  projectId         String
+  project           Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  materialRequestId String?          @unique
+  materialRequest   MaterialRequest? @relation(fields: [materialRequestId], references: [id])
+  raisedById        String
+  raisedBy          User             @relation("PrRaiser", fields: [raisedById], references: [id])
+  neededBy          DateTime?        @db.Date
+  note              String?
+  status            PrStatus         @default(OPEN)
+  isDemo            Boolean          @default(false)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  items      PurchaseRequestItem[]
+  quotations VendorQuotation[]
+  orders     PurchaseOrder[]
+
+  @@index([projectId, status])
+}
+
+model PurchaseRequestItem {
+  id         String          @id @default(cuid())
+  requestId  String
+  request    PurchaseRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  materialId String
+  material   Material        @relation(fields: [materialId], references: [id])
+  quantity   Decimal         @db.Decimal(14, 3)
+
+  quotationItems VendorQuotationItem[]
+
+  @@unique([requestId, materialId])
+}
+
+model VendorQuotation {
+  id                String          @id @default(cuid())
+  code              String          @unique
+  purchaseRequestId String
+  purchaseRequest   PurchaseRequest @relation(fields: [purchaseRequestId], references: [id], onDelete: Cascade)
+  vendorId          String
+  vendor            Vendor          @relation(fields: [vendorId], references: [id])
+  quoteRef          String?
+  quotedOn          DateTime        @db.Date
+  validUntil        DateTime?       @db.Date
+  deliveryDays      Int?
+  paymentTerms      String?
+  status            QuotationStatus @default(RECEIVED)
+  enteredById       String
+  isDemo            Boolean         @default(false)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  items  VendorQuotationItem[]
+  orders PurchaseOrder[]
+
+  @@unique([purchaseRequestId, vendorId])
+}
+
+model VendorQuotationItem {
+  id          String              @id @default(cuid())
+  quotationId String
+  quotation   VendorQuotation     @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  prItemId    String
+  prItem      PurchaseRequestItem @relation(fields: [prItemId], references: [id], onDelete: Cascade)
+  unitRate    Decimal             @db.Decimal(14, 2)
+  taxPct      Decimal             @default(18) @db.Decimal(5, 2)
+
+  @@unique([quotationId, prItemId])
+}
+
+model PurchaseOrder {
+  id                String           @id @default(cuid())
+  code              String           @unique
+  projectId         String
+  project           Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  vendorId          String
+  vendor            Vendor           @relation(fields: [vendorId], references: [id])
+  purchaseRequestId String?
+  purchaseRequest   PurchaseRequest? @relation(fields: [purchaseRequestId], references: [id])
+  quotationId       String?
+  quotation         VendorQuotation? @relation(fields: [quotationId], references: [id])
+  status            PoStatus         @default(ISSUED)
+  orderDate         DateTime         @db.Date
+  expectedDate      DateTime?        @db.Date
+  terms             String?
+  poSubtotal        Decimal          @db.Decimal(16, 2)
+  poTax             Decimal          @db.Decimal(16, 2)
+  poTotal           Decimal          @db.Decimal(16, 2)
+  raisedById        String
+  raisedBy          User             @relation("PoRaiser", fields: [raisedById], references: [id])
+  cancelledAt       DateTime?
+  cancelReason      String?
+  isDemo            Boolean          @default(false)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  items    PurchaseOrderItem[]
+  receipts MaterialReceipt[]
+  invoices VendorInvoice[]
+
+  @@index([projectId, status])
+  @@index([vendorId])
+}
+
+model PurchaseOrderItem {
+  id          String        @id @default(cuid())
+  orderId     String
+  order       PurchaseOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  materialId  String
+  material    Material      @relation(fields: [materialId], references: [id])
+  quantity    Decimal       @db.Decimal(14, 3)
+  unitRate    Decimal       @db.Decimal(14, 2)
+  taxPct      Decimal       @default(18) @db.Decimal(5, 2)
+  receivedQty Decimal       @default(0) @db.Decimal(14, 3)
+
+  receiptItems MaterialReceiptItem[]
+
+  @@unique([orderId, materialId])
+}
+
+model MaterialReceipt {
+  id                String          @id @default(cuid())
+  code              String          @unique
+  orderId           String
+  order             PurchaseOrder   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  projectId         String
+  project           Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  storageLocationId String
+  storageLocation   StorageLocation @relation(fields: [storageLocationId], references: [id])
+  receivedOn        DateTime        @db.Date
+  challanNo         String?
+  note              String?
+  receivedById      String
+  receivedBy        User            @relation("GrnReceiver", fields: [receivedById], references: [id])
+  clientTxnId       String?         @unique
+  isDemo            Boolean         @default(false)
+  createdAt         DateTime        @default(now())
+
+  items MaterialReceiptItem[]
+
+  @@index([orderId])
+  @@index([projectId, receivedOn])
+}
+
+model MaterialReceiptItem {
+  id         String            @id @default(cuid())
+  receiptId  String
+  receipt    MaterialReceipt   @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  poItemId   String
+  poItem     PurchaseOrderItem @relation(fields: [poItemId], references: [id])
+  materialId String
+  material   Material          @relation(fields: [materialId], references: [id])
+  quantity   Decimal           @db.Decimal(14, 3)
+
+  @@unique([receiptId, poItemId])
+}
+
+model VendorInvoice {
+  id              String        @id @default(cuid())
+  code            String        @unique
+  orderId         String
+  order           PurchaseOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  projectId       String
+  project         Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  vendorId        String
+  vendor          Vendor        @relation(fields: [vendorId], references: [id])
+  invoiceNo       String
+  invoiceDate     DateTime      @db.Date
+  dueDate         DateTime?     @db.Date
+  invoiceSubtotal Decimal       @db.Decimal(16, 2)
+  invoiceTax      Decimal       @db.Decimal(16, 2)
+  invoiceTotal    Decimal       @db.Decimal(16, 2)
+  paidAmount      Decimal       @default(0) @db.Decimal(16, 2)
+  status          InvoiceStatus @default(UNPAID)
+  enteredById     String
+  isDemo          Boolean       @default(false)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  payments VendorPayment[]
+
+  @@unique([vendorId, invoiceNo])
+  @@index([projectId, status])
+}
+
+model VendorPayment {
+  id            String        @id @default(cuid())
+  code          String        @unique
+  invoiceId     String
+  invoice       VendorInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  projectId     String
+  project       Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  paymentAmount Decimal       @db.Decimal(16, 2)
+  paidOn        DateTime      @db.Date
+  mode          PaymentMode
+  reference     String?
+  paidById      String
+  isDemo        Boolean       @default(false)
+  createdAt     DateTime      @default(now())
+
+  @@index([invoiceId])
+  @@index([projectId, paidOn])
 }

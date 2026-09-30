@@ -32,3 +32,17 @@ ALTER TABLE "Activity"              ADD CONSTRAINT activity_quantities_valid  CH
 
 -- 4. One DPR per project per day (UNIQUE("projectId","reportDate")) and unique client transaction ids
 --    on every table that can be written offline are declared in schema.prisma.
+
+-- ═════════════════ Part 2 — procurement (milestone 4; applied by the *_procurement migration) ═════════════════
+
+-- Quantities and money are never impossible; a PO line can never be received beyond what was ordered;
+-- an invoice can never be paid beyond its total.
+ALTER TABLE "MaterialRequestItem"  ADD CONSTRAINT mr_item_qty_positive       CHECK (quantity > 0);
+ALTER TABLE "PurchaseRequestItem"  ADD CONSTRAINT pr_item_qty_positive       CHECK (quantity > 0);
+ALTER TABLE "VendorQuotationItem"  ADD CONSTRAINT quotation_item_valid       CHECK ("unitRate" >= 0 AND "taxPct" >= 0 AND "taxPct" <= 100);
+ALTER TABLE "PurchaseOrderItem"    ADD CONSTRAINT po_item_valid              CHECK (quantity > 0 AND "unitRate" >= 0 AND "taxPct" >= 0 AND "taxPct" <= 100 AND "receivedQty" >= 0 AND "receivedQty" <= quantity);
+ALTER TABLE "MaterialReceiptItem"  ADD CONSTRAINT receipt_item_qty_positive  CHECK (quantity > 0);
+ALTER TABLE "VendorInvoice"        ADD CONSTRAINT invoice_amounts_valid      CHECK ("invoiceTotal" >= 0 AND "paidAmount" >= 0 AND "paidAmount" <= "invoiceTotal");
+ALTER TABLE "VendorPayment"        ADD CONSTRAINT payment_amount_positive    CHECK ("paymentAmount" > 0);
+
+-- The same invoice number can't be entered twice for one vendor: UNIQUE("vendorId","invoiceNo") is in schema.prisma.

@@ -11,6 +11,7 @@ import { DEMO_ACCOUNTS, DEMO_PASSWORD } from "../../lib/demo-accounts";
 import { ensureSequenceAtLeast } from "../common";
 import { istToday } from "../dates";
 import { seedHistory, type HistoryAct } from "./history";
+import { seedProcurement } from "./procurement";
 import { solveFront } from "./solver";
 import {
   BOQ_EXTRAS, CHECKLISTS, COST_CODES, EMPLOYEES, EQUIPMENT, GANGS, MATERIALS, MATERIAL_CATEGORIES, SOPS,
@@ -18,7 +19,7 @@ import {
 } from "./data";
 
 /** Bump when the demo data shape changes so deployed demos refresh themselves. */
-export const SEED_VERSION = 3;
+export const SEED_VERSION = 4;
 const META_KEY = "demoSeedVersion";
 
 type Tx = Prisma.TransactionClient;
@@ -356,6 +357,7 @@ async function seedAll(tx: Tx) {
   );
 
   let n = 0;
+  const procurementProjects: Parameters<typeof seedProcurement>[1]["projects"] = [];
   for (const p of PROJECTS) {
     n += 1;
     const code = pad(n);
@@ -376,12 +378,14 @@ async function seedAll(tx: Tx) {
       },
     });
 
-    for (const email of [`pm${p.pm}@buildflow.demo`, ...(p.engineer ? [`engineer${p.engineer}@buildflow.demo`] : [])]) {
+    for (const email of [`pm${p.pm}@buildflow.demo`, ...(p.engineer ? [`engineer${p.engineer}@buildflow.demo`] : []), ...(p.status === "ACTIVE" ? ["store@buildflow.demo"] : [])]) {
       await tx.projectAssignment.create({ data: { userId: userIds.get(email)!, projectId: project.id, createdById: ownerId, isDemo: true } });
     }
     if (n === 1) await tx.user.update({ where: { email: "client@buildflow.demo" }, data: { clientId: client.id } });
 
     const { boqRows, acts, bomRows, mainStoreId, yardId } = await seedProjectPlan(tx, refs, { id: project.id, contractValue, start, finish: baselineFinish }, ownerId);
+
+    if (p.status === "ACTIVE") procurementProjects.push({ index: n, id: project.id, pmEmail: `pm${p.pm}@buildflow.demo`, engineerEmail: p.engineer ? `engineer${p.engineer}@buildflow.demo` : null, mainStoreId });
 
     // Approved DPR history with labour, material issues and a consistent stock ledger.
     if (p.plannedNow > 0 || p.actualNow > 0) {
@@ -419,6 +423,7 @@ async function seedAll(tx: Tx) {
       });
     }
   }
+  await seedProcurement(tx, { today, now: new Date(), ownerId, userIds, materialIds: refs.material, projects: procurementProjects });
   await ensureSequenceAtLeast(tx, "CLI", n);
   await ensureSequenceAtLeast(tx, "PRJ", n);
   await tx.appMeta.upsert({ where: { key: META_KEY }, create: { key: META_KEY, value: String(SEED_VERSION) }, update: { value: String(SEED_VERSION) } });

@@ -25,6 +25,8 @@ export interface LedgerEntryInput {
   refId?: string | null;
   note?: string | null;
   clientTxnId?: string | null;
+  /** Overrides the DEMO_MODE default (the demo seed marks its own rows). */
+  isDemo?: boolean;
 }
 
 /**
@@ -73,7 +75,7 @@ export async function postLedger(tx: Tx, ctx: Pick<Ctx, "userId" | "now">, e: Le
       projectId: e.projectId, storageLocationId: e.storageLocationId, materialId: e.materialId, type: e.type,
       quantity: e.quantity, unitCost, activityId: e.activityId ?? null, dprId: e.dprId ?? null,
       refType: e.refType ?? null, refId: e.refId ?? null, note: e.note ?? null, createdById: ctx.userId,
-      clientTxnId: e.clientTxnId ?? null, isDemo: process.env.DEMO_MODE === "true",
+      clientTxnId: e.clientTxnId ?? null, isDemo: e.isDemo ?? process.env.DEMO_MODE === "true",
     },
   });
 }
