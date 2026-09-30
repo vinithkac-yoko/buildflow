@@ -28,7 +28,8 @@ test.describe("Milestone 8 — offline PWA and sync", () => {
 
   test("work offline, then everything is sent once the connection is back", async ({ page, browser }) => {
     test.setTimeout(240_000);
-    await login(page, "engineer1@buildflow.demo");
+    // Engineer 2 (Avinashi Road) has no report yet today in the demo data, and no other spec files one for them.
+    await login(page, "engineer2@buildflow.demo");
     await page.goto("/dpr");
     await page.waitForURL(/\/dpr\/[a-z0-9]+$/);
     const dprUrl = new URL(page.url()).pathname;
@@ -59,8 +60,7 @@ test.describe("Milestone 8 — offline PWA and sync", () => {
 
     // Fill in the report.
     await page.getByRole("radio", { name: "Cloudy" }).click();
-    for (const n of ["Conduit and wiring", "CPVC water supply lines", "Concealed drainage and soil lines"]) await page.getByRole("button", { name: `Remove ${n}` }).click();
-    await page.getByLabel("Quantity done today").nth(0).fill("12");
+    await page.getByLabel("Quantity done today").nth(0).fill("1");
     await expect(page.getByText(/Saved on your phone .*Will send automatically/)).toBeVisible({ timeout: 15_000 });
 
     // An issue and a photo, offline.
@@ -106,9 +106,9 @@ test.describe("Milestone 8 — offline PWA and sync", () => {
     // What the PM sees: the report, the issue and the request all arrived, once.
     const ctx = await browser.newContext({ ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } });
     const pm = await ctx.newPage();
-    await login(pm, "pm1@buildflow.demo");
+    await login(pm, "pm2@buildflow.demo");
     await pm.goto("/progress?status=SUBMITTED");
-    await expect(pm.locator("main li").filter({ hasText: "RS Puram" }).first()).toBeVisible();
+    await expect(pm.locator("main li").filter({ hasText: "Avinashi Road" }).first()).toBeVisible();
     await pm.goto("/issues");
     await expect(pm.getByText("E2E offline: cracked water tank cover")).toHaveCount(1);
     await pm.goto("/requests?tab=mr");
