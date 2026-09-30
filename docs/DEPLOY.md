@@ -40,3 +40,11 @@ If the build fails, open the deployment's **Build Logs** and send the last 30 li
 - **Every push to the branch redeploys.** Migrations run automatically at start.
 - **Reset demo data** (added in milestone 2): Owner → Settings → *Reset demo data*, only while `DEMO_MODE=true`. Do it just before a demo.
 - Set `DEMO_MODE` to `false` to hide the demo accounts list and the reset button.
+
+## Installing on a phone and working offline
+
+- The service worker and "install app" need **HTTPS**. Railway's `*.up.railway.app` domain is HTTPS, so nothing extra is needed.
+- On Android Chrome: open the app URL, sign in, wait a few seconds on any screen (the app saves the daily-report screens), then menu → **Install app**. On iPhone Safari: Share → **Add to Home Screen**.
+- After a new deploy, the phone picks up the new service worker the next time the app is opened online.
+- Nothing to configure: no new environment variables or services.
+

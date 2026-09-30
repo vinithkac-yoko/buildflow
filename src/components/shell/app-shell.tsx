@@ -6,6 +6,7 @@ import { NavGlyph } from "./icons";
 import { NavLinks, BottomLinks } from "./nav-links";
 import { ThemeToggle } from "./theme-toggle";
 import { UserMenu } from "./user-menu";
+import { SyncProvider } from "@/components/offline/sync-provider";
 import { logoutAction } from "@/app/actions";
 import { LogOut } from "lucide-react";
 
@@ -63,7 +64,7 @@ export function AppShell({
             )}
             <span className="hidden sm:block text-sm text-muted">{ROLE_LABEL[user.role]}</span>
             <ThemeToggle initial={theme} />
-            <UserMenu name={user.name} roleLabel={ROLE_LABEL[user.role]} />
+            <UserMenu name={user.name} roleLabel={ROLE_LABEL[user.role]} engineer={isEngineer} />
           </div>
         </header>
 
@@ -73,7 +74,7 @@ export function AppShell({
             (isEngineer ? "pb-32" : "pb-28 md:pb-8") // room for the bottom tab bar on phones
           }
         >
-          {children}
+          <SyncProvider enabled={isEngineer}>{children}</SyncProvider>
         </main>
       </div>
 

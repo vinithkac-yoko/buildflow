@@ -3,7 +3,7 @@ import { SESSION_COOKIE, verifySessionToken } from "@/lib/session-token";
 
 // Edge gate: cheap signature/expiry check. The real authorization (session row, role, project scope)
 // happens again inside every service via can().
-const PUBLIC = ["/login", "/api/health", "/manifest.webmanifest", "/sw.js", "/icons"];
+const PUBLIC = ["/login", "/offline", "/api/health", "/manifest.webmanifest", "/sw.js", "/icons"];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;

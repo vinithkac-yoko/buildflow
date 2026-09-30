@@ -8,6 +8,7 @@ import { toast } from "@/components/ui/toaster";
 import { LABOUR_SOURCES, SEVERITIES, SEVERITY_LABEL, SOURCE_LABEL, WEATHER_LABEL } from "@/core/dpr/schemas";
 import type { EngineerReport, ReportActivity, ReportLabour } from "@/core/dpr/queries";
 import { formatDate } from "@/lib/format";
+import { callOrQueue, dprKey, removeFromOutbox } from "@/lib/offline/queue-call";
 import { cn } from "@/lib/utils";
 import { PhotoCapture, type PhotoStats } from "./photo-capture";
 import { ChipGroup, PickerSheet, QtyInput, SectionHeader, Stepper, type PickGroup } from "./ui";
@@ -74,10 +75,10 @@ export function DprForm({ report }: { report: EngineerReport }) {
   const [issues, setIssues] = useState(report.issues);
   const [photoStats, setPhotoStats] = useState<PhotoStats>({ saved: report.dpr?.photos.length ?? 0, uploading: 0, failed: 0 });
   const [picker, setPicker] = useState<null | { kind: "activity" } | { kind: "trade"; line: string; row: string } | { kind: "sub"; line: string; row: string } | { kind: "material"; mat: string | "new" } | { kind: "matActivity"; mat: string }>(null);
-  const [saveState, setSaveState] = useState<{ kind: "idle" | "saving" | "saved" | "error"; at?: string; message?: string }>({ kind: "idle" });
+  const [saveState, setSaveState] = useState<{ kind: "idle" | "saving" | "saved" | "queued" | "error"; at?: string; message?: string }>({ kind: "idle" });
   const [serverErrors, setServerErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [done, setDone] = useState<null | { pmName: string | null }>(null);
+  const [done, setDone] = useState<null | { pmName: string | null; queued?: boolean }>(null);
   const [pending, startSubmit] = useTransition();
 
   // ── validation shared by autosave and submit ──
@@ -119,21 +120,34 @@ export function DprForm({ report }: { report: EngineerReport }) {
     const mine = ++seq.current;
     const sending = payloadJson;
     setSaveState({ kind: "saving" });
+    const at = () => new Date().toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true });
     try {
-      const res = await saveDraftAction(projectId, JSON.parse(sending));
+      const saveKey = dprKey("save", projectId, report.reportDate);
+      const out = await callOrQueue(
+        { type: "dpr.save", projectId, reportDate: report.reportDate, clientTxnId: saveKey, payload: JSON.parse(sending), label: `Daily report (draft) — ${report.project.name}` },
+        () => saveDraftAction(projectId, JSON.parse(sending)),
+      );
       if (mine !== seq.current) return;
+      if (out.queued) {
+        lastSaved.current = sending;
+        setServerErrors({});
+        setSaveState({ kind: "queued", at: at() });
+        return;
+      }
+      const res = out.result;
       if (res.ok) {
         lastSaved.current = sending;
         setServerErrors({});
-        setSaveState({ kind: "saved", at: new Date().toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true }) });
+        void removeFromOutbox(saveKey); // an older copy saved on the phone is now out of date
+        setSaveState({ kind: "saved", at: at() });
       } else {
         setServerErrors(res.fieldErrors ?? {});
         setSaveState({ kind: "error", message: res.error });
       }
     } catch {
-      if (mine === seq.current) setSaveState({ kind: "error", message: "No signal. Your entries are kept on this screen — tap to try again." });
+      if (mine === seq.current) setSaveState({ kind: "error", message: "Couldn't save. Your entries are kept on this screen — tap to try again." });
     }
-  }, [payloadJson, projectId]);
+  }, [payloadJson, projectId, report.reportDate, report.project.name]);
 
   useEffect(() => {
     if (payloadJson === lastSaved.current || done) return;
@@ -176,11 +190,22 @@ export function DprForm({ report }: { report: EngineerReport }) {
   const [issueBusy, setIssueBusy] = useState(false);
   async function addIssue() {
     setIssueBusy(true);
-    const res = await addIssueAction(projectId, { title: issueTitle, severity: issueSeverity, clientTxnId: uid() });
+    const txn = uid();
+    const payload = { title: issueTitle, severity: issueSeverity };
+    const out = await callOrQueue(
+      { type: "issue.add", projectId, clientTxnId: txn, payload, label: `Issue — ${issueTitle}` },
+      () => addIssueAction(projectId, { ...payload, clientTxnId: txn }),
+    );
     setIssueBusy(false);
-    if (!res.ok) return toast("error", res.fieldErrors?.title ?? res.fieldErrors?.severity ?? res.error);
-    toast("success", "Issue reported to your PM.");
-    setIssues((cur) => [{ id: String(res.data), code: "NEW", title: issueTitle, severity: issueSeverity ?? "MEDIUM", status: "OPEN" }, ...cur]);
+    if (out.queued) {
+      toast("success", "Saved on your phone. It will be sent to your PM automatically.");
+      setIssues((cur) => [{ id: txn, code: "On phone", title: issueTitle, severity: issueSeverity ?? "MEDIUM", status: "WAITING" }, ...cur]);
+    } else {
+      const res = out.result;
+      if (!res.ok) return toast("error", res.fieldErrors?.title ?? res.fieldErrors?.severity ?? res.error);
+      toast("success", "Issue reported to your PM.");
+      setIssues((cur) => [{ id: String(res.data), code: "NEW", title: issueTitle, severity: issueSeverity ?? "MEDIUM", status: "OPEN" }, ...cur]);
+    }
     setIssueTitle(""); setIssueSeverity(null); setIssueOpen(false);
   }
 
@@ -204,10 +229,22 @@ export function DprForm({ report }: { report: EngineerReport }) {
     setSubmitError(null);
     if (photoStats.failed > 0 && !window.confirm(`${photoStats.failed} photo(s) haven't uploaded, and won't be part of this report. Submit anyway?`)) return;
     startSubmit(async () => {
-      const res = await submitDprAction(projectId, JSON.parse(payloadJson));
+      const key = dprKey("submit", projectId, report.reportDate);
+      const out = await callOrQueue(
+        { type: "dpr.submit", projectId, reportDate: report.reportDate, clientTxnId: key, payload: JSON.parse(payloadJson), label: `Daily report — ${report.project.name}, ${formatDate(report.reportDate)}` },
+        () => submitDprAction(projectId, JSON.parse(payloadJson)),
+      );
+      try { navigator.vibrate?.(10); } catch { /* not supported */ }
+      if (out.queued) {
+        await removeFromOutbox(dprKey("save", projectId, report.reportDate)); // the submit carries the whole report
+        lastSaved.current = payloadJson;
+        setDone({ pmName: report.pmName, queued: true });
+        return;
+      }
+      const res = out.result;
       if (res.ok) {
         lastSaved.current = payloadJson;
-        try { navigator.vibrate?.(10); } catch { /* not supported */ }
+        void removeFromOutbox(dprKey("save", projectId, report.reportDate));
         // Keep the success screen up; the next visit to this page loads the locked, read-only report.
         setDone({ pmName: res.data?.pmName ?? report.pmName });
       } else {
@@ -236,7 +273,7 @@ export function DprForm({ report }: { report: EngineerReport }) {
     ];
   }, [report.materials, lines]);
 
-  if (done) return <SuccessScreen pmName={done.pmName} projectName={report.project.name} />;
+  if (done) return <SuccessScreen pmName={done.pmName} projectName={report.project.name} queued={done.queued} />;
 
   const errFor = (path: string) => serverErrors[path];
 
@@ -440,7 +477,7 @@ export function DprForm({ report }: { report: EngineerReport }) {
       {/* Photos */}
       <SectionHeader id="s-photos" title="Photos" hint={photoStats.saved > 0 ? `${photoStats.saved} saved` : undefined} />
       <section aria-labelledby="s-photos" className="py-4">
-        <PhotoCapture projectId={projectId} initial={report.dpr?.photos ?? []} onStats={setPhotoStats} />
+        <PhotoCapture projectId={projectId} reportDate={report.reportDate} initial={report.dpr?.photos ?? []} onStats={setPhotoStats} />
       </section>
 
       {/* Issues and remarks */}
@@ -495,6 +532,8 @@ export function DprForm({ report }: { report: EngineerReport }) {
               <span className="truncate font-medium text-warn">{reason}</span>
             ) : saveState.kind === "saving" ? (
               <span className="inline-flex items-center gap-1 text-muted"><Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> Saving…</span>
+            ) : saveState.kind === "queued" ? (
+              <span className="truncate text-muted">Saved on your phone {saveState.at}. Will send automatically.</span>
             ) : saveState.kind === "saved" ? (
               <span className="truncate text-muted">Saved {saveState.at}. You can leave and come back.</span>
             ) : saveState.kind === "error" ? (

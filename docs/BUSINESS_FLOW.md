@@ -294,3 +294,17 @@ A work order can be cancelled only before any work is measured. When every line 
 
 **Client portal.** The homeowner sees how much of their home is complete (approved work only), progress by stage, the expected finish date, the latest approved site updates with the photos the PM shared, and the documents released to them. Nothing internal reaches the browser: no plan comparison, days behind, health, issues, NCRs, delays, costs, remarks, or unshared photos and documents.
 
+---
+
+## 20. Working without a signal  *(milestone 8)*
+
+**Install.** BUILDFlow is an installable web app (manifest, icons, service worker). On a phone, open the site in Chrome, use the menu → *Install app* (or *Add to Home screen*), and it opens full-screen like an app.
+
+**What works offline (Site Engineer).** Open the daily report, fill it in, add photos, report an issue, raise a material request or an inspection request. Everything is kept on the phone. The screens are saved each time the engineer opens the app with a signal, so the app should be opened once on data or wifi before going to a dead-signal site.
+
+**What the engineer sees.** A calm banner: *"You're offline. What you enter is saved on this phone and will send when you're back online."* — then *"Sending 3 items…"* — then *"All sent"*. The daily report shows *"Saved on your phone … will send automatically"*, photos show *On phone* until they are uploaded, and a report submitted offline shows *"Report saved on your phone"*.
+
+**When it is sent.** In the order it was made, one record at a time. Each has an id, so sending twice never creates two. If the server refuses something (for example the day has passed, another person already submitted the report, or a quantity is now too high) the item stays on the phone with the reason and two buttons: *Try again* or *Discard*.
+
+**Good to know.** Signing out clears what is saved on the phone (after a warning if something is unsent). The account menu's *Simulate offline* switch lets you demonstrate this without switching the phone to flight mode.
+

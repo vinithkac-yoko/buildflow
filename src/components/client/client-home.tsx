@@ -25,7 +25,7 @@ export function ClientHome({ v }: { v: ClientPortalView }) {
           <div className="h-full rounded-full bg-brand" style={{ width: `${Math.min(100, v.actualPct)}%` }} />
         </div>
         <p className="flex flex-wrap gap-x-6 gap-y-1 text-[16px]">
-          <span className="inline-flex items-center gap-1.5"><CalendarDays className="h-4 w-4 text-muted" aria-hidden />Expected finish <span className="num font-semibold">{formatDate(v.expectedFinish)}</span></span>
+          <span className="inline-flex items-center gap-1.5"><CalendarDays className="h-4 w-4 text-muted" aria-hidden />Expected finish <span className="num font-semibold">{formatDate(v.expectedFinish)}</span>{v.promisedFinish !== v.expectedFinish && <span className="text-muted"> · originally promised <span className="num">{formatDate(v.promisedFinish)}</span></span>}</span>
           <span className="text-muted">{v.lastUpdate ? <>Last site update <span className="num text-text">{formatDate(v.lastUpdate)}</span></> : "Your first site update will appear here once your site team files and your project manager approves a daily report."}</span>
         </p>
       </section>

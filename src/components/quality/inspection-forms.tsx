@@ -8,6 +8,7 @@ import { ChipGroup, PickerSheet, SectionHeader } from "@/components/dpr/ui";
 import { RESULT_LABEL, inspectionResult } from "@/core/quality/calc";
 import type { InspectionFormData } from "@/core/quality/inspections";
 import { SEVERITIES, SEVERITY_LABEL } from "@/core/quality/schemas";
+import { callOrQueue } from "@/lib/offline/queue-call";
 import { cn } from "@/lib/utils";
 
 const newTxn = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : String(Math.random()).slice(2) + Date.now());
@@ -44,7 +45,7 @@ export function InspectionRequestForm({ data }: { data: InspectionFormData }) {
   const [note, setNote] = useState("");
   const [sheet, setSheet] = useState<null | "activity" | "checklist">(null);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState(false);
+  const [done, setDone] = useState<null | "sent" | "queued">(null);
   const [pending, start] = useTransition();
   const txn = useRef(newTxn());
   if (!project) return <p className="text-muted">You are not assigned to an active project.</p>;
@@ -52,16 +53,23 @@ export function InspectionRequestForm({ data }: { data: InspectionFormData }) {
   const send = () => {
     setError(null);
     start(async () => {
-      const res = await requestInspectionAction(project.id, { activityId, checklistId, note: note.trim() || null, clientTxnId: txn.current });
-      if (res.ok) { try { navigator.vibrate?.(10); } catch { /* unsupported */ } setDone(true); } else setError(res.error);
+      const body = { activityId, checklistId, note: note.trim() || null };
+      const out = await callOrQueue(
+        { type: "inspection.request", projectId: project.id, clientTxnId: txn.current, payload: body, label: `Inspection request — ${project.code}` },
+        () => requestInspectionAction(project.id, { ...body, clientTxnId: txn.current }),
+      );
+      try { navigator.vibrate?.(10); } catch { /* unsupported */ }
+      if (out.queued) return setDone("queued");
+      if (out.result.ok) setDone("sent");
+      else setError(out.result.error);
     });
   };
 
   if (done) {
     return (
       <div className="mx-auto flex min-h-[60dvh] max-w-xl flex-col items-center justify-center gap-5 px-4 text-center" role="status">
-        <h1 className="text-3xl">Inspection requested</h1>
-        <p className="text-[18px]">The Quality Engineer will see it on their list.</p>
+        <h1 className="text-3xl">{done === "queued" ? "Request saved on your phone" : "Inspection requested"}</h1>
+        <p className="text-[18px]">{done === "queued" ? "You're offline. It will go to the Quality Engineer automatically when you're back online." : "The Quality Engineer will see it on their list."}</p>
         <Link href="/quality" className="flex min-h-16 w-full max-w-sm items-center justify-center rounded-xl bg-brand text-[18px] font-bold text-brand-on hover:brightness-110">Back to Quality</Link>
       </div>
     );

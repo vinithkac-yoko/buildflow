@@ -2,12 +2,28 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, LogOut, Settings } from "lucide-react";
+import { ChevronDown, CloudOff, LogOut, Settings } from "lucide-react";
 import { logoutAction } from "@/app/actions";
+import { idbClear } from "@/lib/offline/db";
+import { isSimulatedOffline, setSimulatedOffline, subscribeNet } from "@/lib/offline/net";
+import { listOutbox } from "@/lib/offline/outbox";
 
 /** Account menu in the top bar on every screen: who you are, settings, and Sign out. */
-export function UserMenu({ name, roleLabel }: { name: string; roleLabel: string }) {
+export function UserMenu({ name, roleLabel, engineer = false }: { name: string; roleLabel: string; engineer?: boolean }) {
   const [open, setOpen] = useState(false);
+  const [sim, setSim] = useState(false);
+  const logoutForm = useRef<HTMLFormElement>(null);
+  useEffect(() => { setSim(isSimulatedOffline()); return subscribeNet(() => setSim(isSimulatedOffline())); }, []);
+
+  /** Signing out wipes what was saved on the phone. Warn first if something has not been sent yet. */
+  async function signOut(e: React.MouseEvent) {
+    if (!engineer) return;
+    e.preventDefault();
+    const waiting = (await listOutbox()).length;
+    if (waiting > 0 && !window.confirm(`${waiting} item${waiting === 1 ? " is" : "s are"} saved on this phone and not sent yet. Signing out now will lose ${waiting === 1 ? "it" : "them"}. Sign out anyway?`)) return;
+    try { navigator.serviceWorker?.controller?.postMessage({ type: "clear" }); await idbClear("outbox"); await idbClear("kv"); } catch { /* nothing saved */ }
+    logoutForm.current?.requestSubmit();
+  }
   const root = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -49,8 +65,14 @@ export function UserMenu({ name, roleLabel }: { name: string; roleLabel: string 
           >
             <Settings className="h-5 w-5" aria-hidden /> Profile &amp; settings
           </Link>
-          <form action={logoutAction}>
-            <button type="submit" role="menuitem" className="flex min-h-12 w-full items-center gap-2 rounded-lg px-3 text-left text-[15px] font-semibold hover:bg-surface-2 cursor-pointer">
+          {engineer && (
+            <button type="button" role="menuitemcheckbox" aria-checked={sim} onClick={() => setSimulatedOffline(!sim)} className="flex min-h-12 w-full cursor-pointer items-center gap-2 rounded-lg px-3 text-left text-[15px] hover:bg-surface-2">
+              <CloudOff className="h-5 w-5" aria-hidden /> <span className="flex-1">Simulate offline</span>
+              <span className={`rounded-md border px-1.5 text-xs font-semibold ${sim ? "border-warn/60 text-warn" : "border-border text-muted"}`}>{sim ? "On" : "Off"}</span>
+            </button>
+          )}
+          <form ref={logoutForm} action={logoutAction}>
+            <button type="submit" role="menuitem" onClick={signOut} className="flex min-h-12 w-full items-center gap-2 rounded-lg px-3 text-left text-[15px] font-semibold hover:bg-surface-2 cursor-pointer">
               <LogOut className="h-5 w-5" aria-hidden /> Sign out
             </button>
           </form>

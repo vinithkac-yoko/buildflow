@@ -36,6 +36,7 @@ describe.skipIf(!hasDb)("Client portal (integration)", () => {
     });
     let view = await clientPortal(f.ctx.client, f.project.id);
     expect(view.actualPct).toBe(0);
+    expect(view.promisedFinish).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(view.updates).toHaveLength(0);
     expect(view.lastUpdate).toBeNull();
 

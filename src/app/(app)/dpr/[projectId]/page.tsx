@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { engineerReport } from "@/core/dpr/queries";
 import { can } from "@/core/auth/permissions";
 import { AppError } from "@/core/errors";
-import { DprForm } from "@/components/dpr/dpr-form";
+import { DprOffline } from "@/components/dpr/dpr-offline";
 import { DprSubmitted } from "@/components/dpr/dpr-submitted";
 import { NoAccess } from "@/components/no-access";
 import { requireSession } from "@/lib/auth";
@@ -26,5 +26,5 @@ export default async function DprPage({ params }: { params: Promise<{ projectId:
   const status = report.dpr?.status;
   if (status === "SUBMITTED" || status === "APPROVED") return <DprSubmitted report={report} />;
   // Key on the report so a fresh server state (after reject, after submit) resets the form.
-  return <DprForm key={`${report.dpr?.id ?? "new"}:${status ?? "none"}`} report={report} />;
+  return <DprOffline key={`${report.dpr?.id ?? "new"}:${status ?? "none"}`} report={report} />;
 }

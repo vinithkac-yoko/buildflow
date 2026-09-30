@@ -7,6 +7,8 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: { default: "BUILDFlow", template: "%s · BUILDFlow" },
   description: "Construction operating system for premium residential builders.",
+  icons: { icon: [{ url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }], apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180" }] },
+  appleWebApp: { capable: true, title: "BUILDFlow", statusBarStyle: "black-translucent" },
 };
 
 export const viewport: Viewport = {

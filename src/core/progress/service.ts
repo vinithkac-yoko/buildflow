@@ -354,6 +354,8 @@ export interface ClientPortalView {
   location: string;
   status: ProjectStatus;
   startDate: string;
+  /** The finish date in the original agreement, and the current expected date. */
+  promisedFinish: string;
   expectedFinish: string;
   /** Approved work only. No plan comparison, days behind, health, issues or cost. */
   actualPct: number;
@@ -373,7 +375,7 @@ const WEATHER_TEXT: Record<string, string> = { SUNNY: "Sunny", CLOUDY: "Cloudy",
  */
 export async function clientPortal(ctx: Ctx, projectId: string): Promise<ClientPortalView> {
   assertCan(ctx, "read", "project", projectId);
-  const project = await db.project.findUnique({ where: { id: projectId }, select: { id: true, code: true, name: true, location: true, status: true, baselineStart: true, currentFinish: true } });
+  const project = await db.project.findUnique({ where: { id: projectId }, select: { id: true, code: true, name: true, location: true, status: true, baselineStart: true, baselineFinish: true, currentFinish: true } });
   if (!project) throw notFound("That project");
   const [acts, wbsNodes, dprs, photoCount, docs] = await Promise.all([
     db.activity.findMany({ where: { projectId }, include: { wbsNode: { select: { code: true } } } }),
@@ -397,7 +399,7 @@ export async function clientPortal(ctx: Ctx, projectId: string): Promise<ClientP
   const top = new Map(acts.map((a) => [a.id, a.wbsNode.code.split(".")[0]]));
   return {
     projectId, code: project.code, name: project.name, location: project.location, status: project.status,
-    startDate: dateKey(project.baselineStart), expectedFinish: dateKey(project.currentFinish),
+    startDate: dateKey(project.baselineStart), promisedFinish: dateKey(project.baselineFinish), expectedFinish: dateKey(project.currentFinish),
     actualPct: plan.length ? Math.round(actualPct(plan) * 10) / 10 : 0,
     stages: wbsNodes.map((n) => ({ code: n.code, name: n.name, actualPct: Math.round(actualPct(plan.filter((a) => top.get(a.id) === n.code)) * 10) / 10 })),
     lastUpdate: dprs[0] ? dateKey(dprs[0].reportDate) : null,

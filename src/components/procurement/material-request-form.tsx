@@ -5,6 +5,7 @@ import { useMemo, useRef, useState, useTransition } from "react";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 import { createMaterialRequestAction } from "@/actions/procurement";
 import { ChipGroup, PickerSheet, QtyInput, SectionHeader } from "@/components/dpr/ui";
+import { callOrQueue } from "@/lib/offline/queue-call";
 
 export interface MrProject {
   id: string;
@@ -35,7 +36,7 @@ export function MaterialRequestForm({ projects }: { projects: MrProject[] }) {
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [draftError, setDraftError] = useState<string | null>(null);
-  const [done, setDone] = useState<string | null>(null);
+  const [done, setDone] = useState<null | { id?: string; queued?: boolean }>(null);
   const [pending, start] = useTransition();
   const txn = useRef<string>(typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : String(Math.random()).slice(2) + Date.now());
 
@@ -64,25 +65,28 @@ export function MaterialRequestForm({ projects }: { projects: MrProject[] }) {
     if (pendingLines.length === 0) return setError("Add at least one material to request.");
     const d = NEEDED.find((n) => n.value === needed);
     start(async () => {
-      const res = await createMaterialRequestAction(project.id, {
+      const body = {
         neededBy: d?.days === null || d === undefined ? null : istDate(d.days),
         note: note.trim() || null,
         items: pendingLines.map((l) => ({ materialId: l.materialId, quantity: Number(l.quantity), activityId: l.activityId })),
-        clientTxnId: txn.current,
-      });
-      if (res.ok) {
-        try { navigator.vibrate?.(10); } catch { /* not supported */ }
-        setDone(String(res.data));
-      } else setError(res.error);
+      };
+      const out = await callOrQueue(
+        { type: "mr.create", projectId: project.id, clientTxnId: txn.current, payload: body, label: `Material request — ${project.code} ${project.name}` },
+        () => createMaterialRequestAction(project.id, { ...body, clientTxnId: txn.current }),
+      );
+      try { navigator.vibrate?.(10); } catch { /* not supported */ }
+      if (out.queued) return setDone({ queued: true });
+      if (out.result.ok) setDone({ id: String(out.result.data) });
+      else setError(out.result.error);
     });
   }
 
   if (done) {
     return (
       <div className="mx-auto flex min-h-[60dvh] max-w-xl flex-col items-center justify-center gap-5 px-4 text-center" role="status">
-        <h1 className="text-3xl">Request sent</h1>
-        <p className="text-[18px]">Your Project Manager will see it on their list. Procurement takes it from there.</p>
-        <Link href={`/requests/mr/${done}`} className="flex min-h-16 w-full max-w-sm items-center justify-center rounded-xl bg-brand text-[18px] font-bold text-brand-on hover:brightness-110">See this request</Link>
+        <h1 className="text-3xl">{done.queued ? "Request saved on your phone" : "Request sent"}</h1>
+        <p className="text-[18px]">{done.queued ? "You're offline. It will go to your Project Manager automatically when you're back online." : "Your Project Manager will see it on their list. Procurement takes it from there."}</p>
+        {done.id && <Link href={`/requests/mr/${done.id}`} className="flex min-h-16 w-full max-w-sm items-center justify-center rounded-xl bg-brand text-[18px] font-bold text-brand-on hover:brightness-110">See this request</Link>}
         <Link href="/requests" className="flex min-h-14 w-full max-w-sm items-center justify-center rounded-xl border-2 border-border text-[17px] font-semibold hover:bg-surface-2">My requests</Link>
       </div>
     );

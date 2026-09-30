@@ -1,9 +1,12 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { Camera, Loader2, RotateCw, TriangleAlert, X, CheckCircle2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Camera, CloudOff, Loader2, RotateCw, TriangleAlert, X, CheckCircle2 } from "lucide-react";
 import { deletePhotoAction } from "@/actions/dpr";
 import { toast } from "@/components/ui/toaster";
+import { useSync } from "@/components/offline/sync-provider";
+import { isNetworkError, isOffline } from "@/lib/offline/net";
+import { enqueue, removeFromOutbox } from "@/lib/offline/outbox";
 import { cn } from "@/lib/utils";
 
 const TARGET_BYTES = 300 * 1024;
@@ -39,15 +42,15 @@ export async function compressImage(file: Blob): Promise<Blob> {
 
 export interface PhotoStats { saved: number; uploading: number; failed: number }
 const statsOf = (t: { state: string }[]): PhotoStats => ({
-  saved: t.filter((x) => x.state === "saved").length, uploading: t.filter((x) => x.state === "uploading").length, failed: t.filter((x) => x.state === "failed").length,
+  saved: t.filter((x) => x.state === "saved" || x.state === "queued").length, uploading: t.filter((x) => x.state === "uploading").length, failed: t.filter((x) => x.state === "failed").length,
 });
 
-interface Tile { key: string; id?: string; name: string; size: number; preview: string; state: "uploading" | "saved" | "failed"; blob?: Blob; error?: string }
+interface Tile { key: string; id?: string; name: string; size: number; preview: string; state: "uploading" | "saved" | "queued" | "failed"; blob?: Blob; error?: string }
 
 /** Camera button plus thumbnails with a per-photo upload state (Uploading → Saved, or Failed → retry). */
 export function PhotoCapture({
-  projectId, initial, disabled, onStats,
-}: { projectId: string; initial: { id: string; name: string; sizeBytes: number }[]; disabled?: boolean; onStats?: (s: PhotoStats) => void }) {
+  projectId, reportDate, initial, disabled, onStats,
+}: { projectId: string; reportDate?: string; initial: { id: string; name: string; sizeBytes: number }[]; disabled?: boolean; onStats?: (s: PhotoStats) => void }) {
   const [tiles, setTiles] = useState<Tile[]>(() =>
     initial.map((p) => ({ key: p.id, id: p.id, name: p.name, size: p.sizeBytes, preview: `/api/files/dpr-photo/${p.id}`, state: "saved" as const })),
   );
@@ -60,8 +63,17 @@ export function PhotoCapture({
       return next;
     });
 
+  const sync = useSync();
+
+  /** No signal: keep the photo on the phone; the outbox sends it later. */
+  async function keepOnPhone(key: string, blob: Blob, name: string) {
+    await enqueue({ type: "photo", projectId, reportDate, clientTxnId: key, payload: null, blob, fileName: name.replace(/\.[^.]+$/, "") + ".jpg", label: `Photo — ${name}` });
+    update(key, { state: "queued", blob: undefined, error: undefined });
+  }
+
   async function upload(key: string, blob: Blob, name: string) {
     update(key, { state: "uploading", error: undefined });
+    if (isOffline()) return keepOnPhone(key, blob, name);
     try {
       const form = new FormData();
       form.set("file", new File([blob], name.replace(/\.[^.]+$/, "") + ".jpg", { type: blob.type || "image/jpeg" }));
@@ -71,9 +83,32 @@ export function PhotoCapture({
       if (!res.ok || !data.id) throw new Error(data.error ?? "The photo couldn't be saved.");
       update(key, { id: data.id, state: "saved", blob: undefined });
     } catch (e) {
-      update(key, { state: "failed", error: e instanceof Error && e.message !== "Failed to fetch" ? e.message : "No signal. Tap to try again.", blob });
+      if (isNetworkError(e)) return keepOnPhone(key, blob, name); // the signal dropped: keep it, don't lose it
+      update(key, { state: "failed", error: e instanceof Error ? e.message : "The photo couldn't be saved.", blob });
     }
   }
+
+  // Photos saved on the phone: show them as "waiting", and as sent once the outbox has delivered them.
+  useEffect(() => {
+    const mine = new Map(sync.items.filter((i) => i.type === "photo" && i.projectId === projectId).map((i) => [i.clientTxnId, i]));
+    setTiles((cur) => {
+      let changed = false;
+      const next = cur.map((t) => {
+        if (t.state !== "queued") return t;
+        const item = mine.get(t.key);
+        if (!item) { changed = true; return { ...t, state: "saved" as const }; }
+        if (item.status === "conflict" || item.status === "error") { changed = true; return { ...t, state: "failed" as const, error: item.message }; }
+        return t;
+      });
+      // photos left in the outbox by an earlier visit
+      for (const [key, item] of mine) {
+        if (!next.some((t) => t.key === key) && item.blob) { next.push({ key, name: item.fileName ?? "photo.jpg", size: item.blob.size, preview: URL.createObjectURL(item.blob), state: "queued" }); changed = true; }
+      }
+      if (changed) onStats?.(statsOf(next));
+      return changed ? next : cur;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sync.items, projectId]);
 
   async function onFiles(files: FileList | null) {
     if (!files?.length) return;
@@ -90,7 +125,7 @@ export function PhotoCapture({
     if (t.id) {
       const res = await deletePhotoAction(t.id);
       if (!res.ok) return toast("error", res.error);
-    }
+    } else await removeFromOutbox(t.key); // a photo still on the phone: take it off the queue too
     setTiles((cur) => {
       const next = cur.filter((x) => x.key !== t.key);
       onStats?.(statsOf(next));
@@ -121,6 +156,7 @@ export function PhotoCapture({
               >
                 {t.state === "uploading" && <><Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> Uploading</>}
                 {t.state === "saved" && <><CheckCircle2 className="h-3.5 w-3.5" aria-hidden /> Saved</>}
+                {t.state === "queued" && <><CloudOff className="h-3.5 w-3.5" aria-hidden /> On phone</>}
                 {t.state === "failed" && <><TriangleAlert className="h-3.5 w-3.5" aria-hidden /> Failed</>}
               </div>
               {t.state === "failed" && t.blob && (
