@@ -5,6 +5,9 @@ import { ROLE_LABEL } from "@/lib/format";
 import { NavGlyph } from "./icons";
 import { NavLinks, BottomLinks } from "./nav-links";
 import { ThemeToggle } from "./theme-toggle";
+import { UserMenu } from "./user-menu";
+import { logoutAction } from "@/app/actions";
+import { LogOut } from "lucide-react";
 
 export function AppShell({
   user,
@@ -32,9 +35,16 @@ export function AppShell({
         <nav aria-label="Main" className="flex-1 overflow-y-auto p-3">
           <NavLinks items={items.map((i) => ({ href: i.href, label: i.label, icon: i.icon }))} />
         </nav>
-        <div className="border-t border-border p-4 text-sm">
-          <div className="font-medium truncate">{user.name}</div>
-          <div className="text-muted">{ROLE_LABEL[user.role]}</div>
+        <div className="border-t border-border p-3 text-sm">
+          <div className="px-2 pb-2">
+            <div className="truncate font-medium">{user.name}</div>
+            <div className="text-muted">{ROLE_LABEL[user.role]}</div>
+          </div>
+          <form action={logoutAction}>
+            <button type="submit" className="flex min-h-11 w-full items-center gap-2 rounded-xl px-2 text-[15px] font-semibold text-text hover:bg-surface-2 cursor-pointer">
+              <LogOut className="h-5 w-5" aria-hidden /> Sign out
+            </button>
+          </form>
         </div>
       </aside>
 
@@ -53,6 +63,7 @@ export function AppShell({
             )}
             <span className="hidden sm:block text-sm text-muted">{ROLE_LABEL[user.role]}</span>
             <ThemeToggle initial={theme} />
+            <UserMenu name={user.name} roleLabel={ROLE_LABEL[user.role]} />
           </div>
         </header>
 
