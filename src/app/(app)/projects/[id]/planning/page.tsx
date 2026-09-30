@@ -194,6 +194,7 @@ async function ActivitiesTab({ projectId }: { projectId: string }) {
                   <div className="mt-1 text-[17px] font-semibold leading-snug">{a.name}{a.criticalPath && <Flame className="ml-1.5 inline h-4 w-4 text-warn" aria-label="Critical path" />}</div>
                   <div className="mt-1 text-sm text-muted">{a.wbsNode.code} {a.wbsNode.name}</div>
                   <div className="num mt-2 text-sm">{a.plannedQty} {a.uom.code} · {formatDate(a.plannedStart)} → {formatDate(a.plannedFinish)}</div>
+                  {showCost && a.plannedCost !== undefined && <div className="num mt-1 text-sm text-muted">Planned cost <span className="font-semibold text-text">{formatInr(a.plannedCost)}</span></div>}
                 </Link>
               </li>
             ))}

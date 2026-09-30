@@ -9,12 +9,12 @@ test.describe("Milestone 2 — masters, projects, planning", () => {
     await page.goto("/masters");
     await expect(page.getByRole("heading", { name: "Masters" })).toBeVisible();
     await page.goto("/masters/material");
-    await expect(page.getByText("Cement OPC 53").first()).toBeVisible();
+    await expect(page.getByText("Cement OPC 53").filter({ visible: true }).first()).toBeVisible();
 
     // search filters the list
     await page.getByLabel("Search Materials").fill("marble");
     await page.getByRole("button", { name: "Search" }).click();
-    await expect(page.getByText("Italian marble").first()).toBeVisible();
+    await expect(page.getByText("Italian marble").filter({ visible: true }).first()).toBeVisible();
     await expect(page.getByText("Cement OPC 53")).toHaveCount(0);
 
     const name = `Test grout ${uid()}`;
@@ -31,7 +31,7 @@ test.describe("Milestone 2 — masters, projects, planning", () => {
     await dialog.getByRole("button", { name: "Save" }).click();
     await expect(page.getByText("Material added.")).toBeVisible();
     await page.goto("/masters/material?q=" + encodeURIComponent(name));
-    await expect(page.getByText(name).first()).toBeVisible();
+    await expect(page.getByText(name).filter({ visible: true }).first()).toBeVisible();
   });
 
   test("forms show validation next to the field", async ({ page }) => {
@@ -98,7 +98,7 @@ test.describe("Milestone 2 — masters, projects, planning", () => {
     await expect(page.getByText("Foundation").first()).toBeVisible();
     await page.getByRole("link", { name: "Activities" }).click();
     await expect(page.getByText(/\d+ activities/).first()).toBeVisible();
-    await expect(page.getByRole("columnheader", { name: "Planned cost" }).or(page.getByText("Planned cost").first())).toBeVisible();
+    await expect(page.getByText("Planned cost").filter({ visible: true }).first()).toBeVisible();
 
     await page.getByRole("link", { name: "Italian marble flooring" }).first().click();
     await expect(page.getByRole("heading", { name: "Italian marble flooring" })).toBeVisible();
@@ -227,14 +227,21 @@ test.describe("Milestone 2 — masters, projects, planning", () => {
     await page.context().clearCookies();
     await login(page, "procurement@buildflow.demo");
     await page.goto("/vendors");
-    await expect(page.getByText("Kovai Cement & Steel Depot").first()).toBeVisible();
+    await expect(page.getByText("Kovai Cement & Steel Depot").filter({ visible: true }).first()).toBeVisible();
     await page.goto("/masters/material");
     await expect(page.getByText("Standard unit cost")).toHaveCount(0);
   });
 
-  test("audit log records master and planning changes", async ({ page }) => {
+  test("audit log records master changes", async ({ page }) => {
     await login(page, "owner@buildflow.demo");
-    await page.goto("/settings/audit?entity=Material");
+    await page.goto("/masters/trade");
+    const name = `Audit trade ${uid()}`;
+    await page.getByRole("button", { name: /new trade/i }).click();
+    await page.getByRole("dialog").getByLabel(/Trade/).fill(name);
+    await page.getByRole("dialog").getByRole("button", { name: "Save" }).click();
+    await expect(page.getByText("Trade added.")).toBeVisible();
+    await page.goto("/settings/audit?entity=Trade");
     await expect(page.getByText("CREATE").first()).toBeVisible();
+    await expect(page.getByText(name).first()).toBeVisible();
   });
 });
