@@ -308,3 +308,18 @@ A work order can be cancelled only before any work is measured. When every line 
 
 **Good to know.** Signing out clears what is saved on the phone (after a warning if something is unsent). The account menu's *Simulate offline* switch lets you demonstrate this without switching the phone to flight mode.
 
+
+## 21. Ask BUILDFlow (preview)  *(milestone 9)*
+
+**Who.** The Owner and Project Managers. The screen says *"Preview — AI assistant coming in Phase 2"*. There is no artificial intelligence in it yet.
+
+**What it does.** Four questions are offered as buttons. Tapping one shows the answer from your live data, with the time it was read and the name of the read function behind it:
+
+1. **Which activities are behind schedule?** Open activities that should be at least 15 points further along than they are — critical path first, then the worst gap. Each shows planned %, actual %, the due date and links to the activity.
+2. **What's low on stock?** Materials at or below their reorder level, by project, with what is left.
+3. **Open NCRs this week?** Every NCR not yet closed, with severity and stage; those raised in the last 7 days are tagged *New this week*.
+4. **Labour mandays by project this week?** Mandays and worker-days from submitted or approved reports in the last 7 days, largest first.
+
+**What it will not do.** It does not accept typed questions, it never shows money, and a Project Manager only sees their own projects. Site engineers, clients and other roles do not have the screen.
+
+**Phase 2.** The same four functions (in `src/core/tools`) are shaped as agent tools, so an assistant can call them later without new business logic.

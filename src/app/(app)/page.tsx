@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { FolderKanban, Info } from "lucide-react";
 import { listProjects } from "@/core/projects/service";
+import { NAV } from "@/config/navigation";
 import { Card } from "@/components/ui/card";
+import { NavGlyph } from "@/components/shell/icons";
 import { PortfolioScreen } from "@/components/portfolio/portfolio-screen";
 import { requireSession } from "@/lib/auth";
 import { ROLE_LABEL } from "@/lib/format";
@@ -42,20 +43,19 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
         </section>
       )}
 
-      <Card className="flex items-start gap-3">
-        <Info className="mt-0.5 h-5 w-5 shrink-0 text-planned" aria-hidden />
-        <div className="text-[15px]">
-          <p className="font-medium">Milestone 2 · masters</p>
-          <p className="text-muted">
-            Sign-in, roles, projects, planning (WBS, activities, BOQ) and all master lists are live. Daily reports, stock, quality and the portfolio view arrive in the next milestones.
-          </p>
-          {canListProjects && (
-            <Link href="/projects" className="mt-2 inline-flex min-h-11 items-center gap-2 font-semibold text-brand-text">
-              <FolderKanban className="h-5 w-5" aria-hidden /> Open projects
-            </Link>
-          )}
-        </div>
-      </Card>
+      <section aria-label="Your screens">
+        <h2 className="mb-2 text-lg">Your screens</h2>
+        <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {NAV[user.role].filter((n) => n.href !== "/").map((n) => (
+            <li key={n.href}>
+              <Link href={n.href} className="panel flex min-h-14 items-center gap-3 px-4 py-3 hover:bg-surface-2">
+                <NavGlyph name={n.icon} className="h-5 w-5 shrink-0 text-muted" />
+                <span><span className="block font-semibold">{n.label}</span><span className="block text-sm text-muted">{n.blurb}</span></span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </section>
     </div>
   );
 }

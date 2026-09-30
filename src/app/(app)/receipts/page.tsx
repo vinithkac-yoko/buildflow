@@ -35,7 +35,7 @@ export default async function ReceiptsPage() {
             {details.map((o) => (
               <li key={o.id} className="panel p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span><Link href={`/purchase-orders/${o.id}`} className="code text-[17px] font-semibold underline">{o.code}</Link> <span className="text-muted">· {o.vendor.name} · {o.projectCode}</span></span>
+                  <span><Link href={`/purchase-orders/${o.id}`} className="code inline-flex min-h-11 items-center text-[17px] font-semibold underline">{o.code}</Link> <span className="text-muted">· {o.vendor.name} · {o.projectCode}</span></span>
                   <PoChip status={o.status} />
                 </div>
                 <ul className="mt-2 space-y-0.5 text-[16px]">

@@ -25,9 +25,6 @@ import { ROLE_LABEL, formatDate, formatInr } from "@/lib/format";
 import type { FieldDef } from "@/lib/forms";
 import { projectFormFields } from "../project-fields";
 
-/** Milestones already shipped: a locked tile below this line is about the role, not about the build. */
-const BUILT_UP_TO = 6;
-
 interface Tile { label: string; icon: NavIcon; milestone: number; href?: (id: string, role: string) => string | null }
 const TILES: Tile[] = [
   { label: "Planning", icon: "planning", milestone: 2, href: (id) => `/projects/${id}/planning` },
@@ -189,7 +186,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
                   {live ? (
                     <div className="text-xs text-brand-text">Open</div>
                   ) : (
-                    <div className="flex items-center gap-1 text-xs text-muted"><Lock className="h-3 w-3" aria-hidden /> {t.milestone <= BUILT_UP_TO ? "Not for your role" : `Milestone ${t.milestone}`}</div>
+                    <div className="flex items-center gap-1 text-xs text-muted"><Lock className="h-3 w-3" aria-hidden /> Not for your role</div>
                   )}
                 </div>
               </>

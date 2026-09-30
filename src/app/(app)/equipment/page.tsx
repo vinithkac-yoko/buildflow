@@ -32,7 +32,7 @@ export default async function EquipmentPage({ searchParams }: { searchParams: Pr
           {rows.map((e) => (
             <li key={e.id} className="panel p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <span><Link href={`/equipment/${e.id}`} className="text-[18px] font-semibold underline-offset-2 hover:underline">{e.name}</Link> <span className="code text-sm text-muted">{e.code}</span></span>
+                <span><Link href={`/equipment/${e.id}`} className="inline-flex min-h-11 items-center text-[18px] font-semibold underline-offset-2 hover:underline">{e.name}</Link> <span className="code text-sm text-muted">{e.code}</span></span>
                 <span className="flex gap-2"><Badge tone="slate">{OWN[e.ownership]}</Badge><Badge tone={TONE[e.status]}>{EQUIPMENT_STATUS_LABEL[e.status]}</Badge></span>
               </div>
               <p className="mt-1 text-[15px] text-muted">{e.category} · {e.assignment ? `On ${e.assignment.projectCode}${e.assignment.projectName ? ` ${e.assignment.projectName}` : ""}${e.assignment.activity ? ` · ${e.assignment.activity}` : ""} since ${formatDate(e.assignment.since)}` : "Not on any project"}</p>

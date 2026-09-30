@@ -32,7 +32,7 @@ export default async function AssignmentsPage() {
         return (
           <Card key={p.id} className="space-y-3">
             <div>
-              <Link href={`/projects/${p.id}`} className="text-lg font-semibold hover:underline">{p.name}</Link>
+              <Link href={`/projects/${p.id}`} className="inline-flex min-h-11 items-center text-lg font-semibold hover:underline">{p.name}</Link>
               <div className="code text-xs text-muted">{p.code}</div>
             </div>
             {team.length === 0 ? (

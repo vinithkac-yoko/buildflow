@@ -46,7 +46,7 @@ export async function DocumentsScreen({ searchParams, fixedCategory, title = "Do
           {docs.map((d) => (
             <li key={d.id} className="panel p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <span><Link href={`/documents/${d.id}`} className="text-[18px] font-semibold underline-offset-2 hover:underline">{d.title}</Link> <span className="code text-sm text-muted">{d.code}</span></span>
+                <span><Link href={`/documents/${d.id}`} className="inline-flex min-h-11 items-center text-[18px] font-semibold underline-offset-2 hover:underline">{d.title}</Link> <span className="code text-sm text-muted">{d.code}</span></span>
                 {!client && <Badge tone={TONE[d.status]}>{DOC_STATUS_LABEL[d.status]}</Badge>}
               </div>
               <p className="mt-0.5 text-sm text-muted">{CATEGORY_LABEL[d.category]} · {d.projectCode} · version {d.currentVersion} · {d.fileName} ({kb(d.sizeBytes)}) · updated {formatDate(d.updatedAt)}</p>

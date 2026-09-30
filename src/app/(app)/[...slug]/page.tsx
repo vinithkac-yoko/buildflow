@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { Hammer } from "lucide-react";
+import { CalendarClock } from "lucide-react";
 import { findNavItem } from "@/config/navigation";
 import { Card } from "@/components/ui/card";
 import { requireSession } from "@/lib/auth";
@@ -14,9 +14,9 @@ export default async function PlaceholderPage({ params }: { params: Promise<{ sl
     <div className="mx-auto max-w-2xl space-y-4">
       <h1 className="text-2xl md:text-3xl">{item.label}</h1>
       <Card className="flex items-start gap-3">
-        <Hammer className="mt-0.5 h-5 w-5 shrink-0 text-planned" aria-hidden />
+        <CalendarClock className="mt-0.5 h-5 w-5 shrink-0 text-planned" aria-hidden />
         <div>
-          <p className="font-medium">Not built yet — arrives in milestone {item.milestone}.</p>
+          <p className="font-medium">Coming in a later release.</p>
           <p className="text-muted">{item.blurb}</p>
         </div>
       </Card>

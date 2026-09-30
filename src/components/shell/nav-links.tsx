@@ -50,7 +50,7 @@ export function BottomLinks({ items }: { items: Item[] }) {
               href={i.href}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "flex min-h-16 flex-col items-center justify-center gap-1 px-1 text-xs font-semibold transition-colors duration-fast",
+                "flex min-h-16 flex-col items-center justify-center gap-1 px-0.5 text-xs font-semibold tracking-tight transition-colors duration-fast",
                 active ? "text-brand-text" : "text-muted",
               )}
             >
