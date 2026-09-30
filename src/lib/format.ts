@@ -43,3 +43,19 @@ export const ROLE_LABEL: Record<string, string> = {
   ADMIN: "Admin",
   CLIENT: "Client",
 };
+
+/** Clock time in India (IST), e.g. 5:42 PM. */
+export function formatTime(d: Date | string): string {
+  const date = typeof d === "string" ? new Date(d) : d;
+  const ist = new Date(date.getTime() + 5.5 * 3600 * 1000);
+  const h = ist.getUTCHours();
+  const m = String(ist.getUTCMinutes()).padStart(2, "0");
+  return `${((h + 11) % 12) + 1}:${m} ${h >= 12 ? "PM" : "AM"}`;
+}
+
+export function daysLabel(days: number): string {
+  if (days === 0) return "On plan";
+  const n = Math.abs(days);
+  const unit = n === 1 ? "day" : "days";
+  return days > 0 ? `${n} ${unit} ahead` : `${n} ${unit} behind`;
+}

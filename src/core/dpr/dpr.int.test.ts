@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { AppError } from "@/core/errors";

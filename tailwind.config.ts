@@ -31,6 +31,10 @@ const config: Config = {
           from: { opacity: "0", transform: "translateY(6px)" },
           to: { opacity: "1", transform: "translateY(0)" },
         },
+        "bar-grow": {
+          from: { transform: "scaleX(0)" },
+          to: { transform: "scaleX(1)" },
+        },
         "pulse-dot": {
           "0%,100%": { opacity: "1", transform: "scale(1)" },
           "50%": { opacity: "0.45", transform: "scale(0.8)" },
@@ -39,6 +43,7 @@ const config: Config = {
       animation: {
         "fade-up": "fade-up 220ms ease-out both",
         "pulse-dot": "pulse-dot 2s ease-in-out infinite",
+        "bar-grow": "bar-grow 320ms ease-out both",
       },
     },
   },

@@ -8,6 +8,10 @@ import { STORAGE_KIND_LABEL, listStorage } from "@/core/planning/storage";
 import { getProject } from "@/core/projects/service";
 import { PROJECT_STATUS_LABEL, PROJECT_TRANSITIONS } from "@/core/projects/transitions";
 import { listAssignments } from "@/core/users/assignments";
+import { healthFormula, projectDetailProgress } from "@/core/progress/service";
+import { BandChip, DualBar, HealthRing } from "@/components/portfolio/parts";
+import { SCurve } from "@/components/portfolio/scurve";
+import { daysLabel } from "@/lib/format";
 import { ActionButton } from "@/components/forms/action-button";
 import { ModalForm } from "@/components/forms/modal-form";
 import { DemoBadge, ProjectStatusChip } from "@/components/status-chip";
@@ -56,6 +60,8 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
     can(ctx, "read", "storage_location", id) ? listStorage(ctx, id) : Promise.resolve([]),
   ]);
   const nextStatuses = canEdit ? PROJECT_TRANSITIONS[p.status] : [];
+  const showProgress = can(ctx, "read", "dashboard") && ctx.role !== "CLIENT" && p.status !== "PLANNING";
+  const progress = showProgress ? await projectDetailProgress(ctx, id).catch(() => null) : null;
 
   const facts: [string, string | undefined][] = [
     ["Client", p.client.name],
@@ -119,6 +125,35 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
           </div>
         )}
       </Card>
+
+      {progress && (
+        <Card className="space-y-5">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="min-w-0 flex-1 space-y-2">
+              <h2 className="text-lg">Progress</h2>
+              <DualBar planned={progress.plannedPct} actual={progress.actualPct} label="Overall progress" />
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <BandChip band={progress.band} />
+                <span className={`num text-sm font-semibold ${progress.daysAheadBehind < 0 ? "text-danger" : "text-brand-text"}`}>{daysLabel(progress.daysAheadBehind)}</span>
+              </div>
+              <p className="text-sm text-muted">{progress.weightNote}</p>
+            </div>
+            {progress.health && <HealthRing score={progress.health.score} band={progress.health.band} tip={healthFormula()} />}
+          </div>
+          {progress.curve.length > 1 && <SCurve id={`detail-${id}`} data={progress.curve} height={170} />}
+          <div>
+            <h3 className="mb-2 text-[15px] font-semibold">By stage</h3>
+            <ul className="grid gap-x-8 gap-y-3 md:grid-cols-2">
+              {progress.wbs.map((w) => (
+                <li key={w.code}>
+                  <div className="mb-1 flex justify-between text-sm"><span className="font-medium">{w.name}</span><span className="text-muted">{w.activities} activities</span></div>
+                  <DualBar planned={w.plannedPct} actual={w.actualPct} label={w.name} />
+                </li>
+              ))}
+            </ul>
+          </div>
+        </Card>
+      )}
 
       <section aria-labelledby="modules">
         <h2 id="modules" className="mb-3 text-lg">Project modules</h2>

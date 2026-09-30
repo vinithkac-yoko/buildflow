@@ -45,3 +45,20 @@ Items 1–13 come from the kickoff prompt (§12): the client spec left them open
 | 38 | Company-level masters (material standard cost, employee wage, gang rate) are visible to the cost-visible roles including PMs; everyone else gets the columns removed at the source. | PM cost visibility is per prompt §5; company masters have no single project. | yes |
 | 39 | Vendor categories and equipment categories are fixed pick-lists, not free text. | Prompt §2.5: controlled master data. | no |
 | 40 | Contract labour gangs are a master ("Contract Labour" in the spec); piece-rate and subcontractor labour sources arrive with labour logs in milestone 3. | Spec separates four labour sources. | no |
+| 41 | Milestone 3 also contains the inventory ledger core (ledger, running balances, database guards), which the prompt lists under milestone 4. | DPR approval must issue material from stock (Flow A step 4) and block when it is short; receipts, transfers and procurement still arrive in milestone 4. | no |
+| 42 | A report's "today" is the calendar date in India (IST), not UTC. | Sites and engineers work in IST; UTC would flip the date at 5:30 AM. | no |
+| 43 | An activity can be reported up to 110% of its planned quantity in total; beyond that the report is stopped with a message saying what is left. | Spec: prevent "impossible output" but real sites overrun slightly. | yes |
+| 44 | Material used is issued to a named activity, from the Main Store first and then other locations. Approval is blocked, with the exact shortage, if the project's total stock is short; nothing is partly posted. | Prompt Flow A step 4. | yes |
+| 45 | Labour cost is computed by the server from the average daily wage of the trade (employees and gangs). Engineers never enter or see money. | Cost data is hidden from the site team. | yes |
+| 46 | Several engineers can add to the same draft; each edits only their own lines, and the first submit locks the report. | Decision 1. | yes |
+| 47 | A rejected report reopens as a draft when the engineer edits it, and can be submitted again. The PM's reason is shown to the engineer. | Keeps one report per day and one clear next step. | no |
+| 48 | Issues raised inside the DPR are saved immediately, not with the draft. | An issue must never be lost or duplicated by autosave. | no |
+| 49 | DPR photos accept JPEG, PNG and WebP only (checked by file signature), up to 15 MB; the phone shrinks them to about 300 KB first. Files live under UPLOAD_DIR and are served only through an authorised route. Drawings (PDF, DWG, DXF) arrive with documents in milestone 6. | Prompt §1/§9. | no |
+| 50 | Days ahead/behind = the date on which the plan reached today's actual %, compared with today. Behind by 12 days means the plan expected today's progress 12 days ago. | A plain-language version of schedule variance. | yes |
+| 51 | The portfolio screen is for the Owner and Project Managers; a PM sees only assigned projects. Engineers and clients never see it. | Prompt §6. | no |
+| 52 | Health score v0 uses the formula in decision 3. Until NCRs exist (milestone 5) the NCR component is a full 20. Bands: 75+ Healthy, 50–74 Watch, below 50 At risk. | Needs thresholds to show a chip. | yes |
+| 53 | Approving a report claims it with a single conditional update first, so a double click or two PMs cannot count it twice. | Data must be trustworthy by construction. | no |
+| 54 | Clients see only approved reports, and only photos the PM has shared. | Decision 9. | yes |
+| 55 | The inventory ledger can be deleted from only by the demo reset (it sets a session flag inside its own transaction). Everything else is blocked by a database trigger. | Append-only ledger vs. a resettable demo. | no |
+| 56 | The demo history covers each project's whole life (about 1,750 approved reports), not only six weeks, so S-curves, stock and labour are consistent. Each site is solved to a chosen planned % and actual %, so the portfolio tells a different story per site. | Prompt §10 asks for at least six weeks. | no |
+

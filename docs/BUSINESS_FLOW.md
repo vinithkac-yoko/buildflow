@@ -130,3 +130,69 @@ Once daily reports arrive (milestone 3), approval will move activities along thi
 
 Everything the seed creates is flagged DEMO and shows a DEMO badge. While the app runs in demo mode, records people create are flagged too. The Owner's **Settings → Reset demo data** button (demo mode only) deletes every DEMO record and recreates the starting data in one step; everyone is signed out and demo accounts keep the password `demo1234`.
 
+---
+
+## 7. Daily progress report (DPR)  *(milestone 3)*
+
+**One report per project per day** (the database refuses a second). The Site Engineer opens it on a phone; several engineers on a project add to the same report while it is a draft.
+
+**What goes in it.**
+- Weather (Sunny, Cloudy, Rain, Heavy rain), and an optional "No work today" with a reason.
+- **Work done:** for each activity, today's quantity and its labour — trade, number of people, hours (up to 16), and source (Company, Contract, Piece rate, Subcontractor — the subcontractor is named).
+- **Material used:** material, quantity, and the activity it was used on. The screen shows what is in stock.
+- **Photos:** taken on the phone, shrunk to about 300 KB, each with its own upload state.
+- **Issues:** quick add; saved straight away.
+- Remarks.
+
+The screen starts filled from yesterday (yesterday's activities and crews), saves as you type, and submits with one big button.
+
+**Life-cycle.**
+
+| From | To | Who |
+|---|---|---|
+| (new) | DRAFT | any engineer on the project, by opening today's report |
+| DRAFT | SUBMITTED | the engineer; the first submit locks it for everyone else |
+| SUBMITTED | APPROVED | the PM of the project, or the Owner |
+| SUBMITTED | REJECTED | the PM, with a reason the engineer sees |
+| REJECTED | DRAFT | the engineer, by editing; then submit again |
+
+**Checks before a report is accepted.** An activity can't be reported beyond 110% of its planned quantity in total (the message says what is left). Labour hours must be more than 0 and at most 16. Subcontractor labour needs a subcontractor. A material must name an activity. To submit: weather, and either a quantity or "No work today" with a reason.
+
+**What approval does — all in one step, or not at all.**
+1. The report is claimed so it can't be counted twice.
+2. Each activity gets the quantity added. NOT_STARTED becomes IN_PROGRESS on its first quantity; it becomes COMPLETED when the total reaches the plan. A halted activity blocks approval until it is resumed.
+3. Labour mandays (people × hours ÷ 8) are added to the activity.
+4. Material is issued from project stock (Main Store first, then other locations) as ACTIVITY_ISSUE ledger entries. If any material is short, approval is stopped and the message lists every shortage; nothing is changed.
+5. An audit row records who approved what.
+
+**Who sees what.** Engineers see only today's report (no history) and no money. PMs and the Owner see every report for their projects, with labour cost. Clients see approved reports only, and only photos the PM has chosen to share.
+
+---
+
+## 8. Stock  *(ledger core in milestone 3; receipts and procurement in milestone 4)*
+
+Stock is held per project, per storage location, per material. Every change is a line in an **append-only ledger**; the running balance is updated in the same transaction. Types that add stock: OPENING_STOCK, PO_RECEIPT, TRANSFER_IN, ACTIVITY_RETURN. Types that remove it: TRANSFER_OUT, ACTIVITY_ISSUE, WASTAGE, THEFT_LOSS. Valuation is a moving weighted average.
+
+**Rules the database enforces:** a balance can never go below zero; ledger lines can't be edited or deleted; quantities are always positive; labour hours stay within 0–16.
+
+**Screens.** "Stock" (Materials for site roles) shows each material's total, where it sits, and a low-stock flag when it is at or below its reorder threshold. Cost columns are shown only to roles that may see them.
+
+---
+
+## 9. Progress, days ahead/behind and health  *(milestone 3, polished in milestone 7)*
+
+- **Actual %** = each activity's approved quantity ÷ planned quantity (capped at 100%), weighted by planned cost — or planned mandays if cost is unavailable, or equally if neither exists.
+- **Plan %** = where the plan says the work should be today, interpolating each activity between its planned start and finish.
+- **Days ahead/behind** = the date the plan reached today's actual %, compared with today.
+- **Band:** Ahead (3+ points over plan), On track, Slightly behind (3–8 points under), Behind (8+ points under).
+- **Health score (0–100):** schedule 50 (loses 2 points per point behind) + NCRs 20 + open critical issues 15 (10 lost per issue) + reports filed in the last 7 days 15.
+- **Needs attention** lists activities that are 15+ points behind (critical-path first), reports waiting for approval, projects with no approved report for more than a day, serious open issues, and low stock.
+
+The portfolio screen is for the Owner and PMs. It is grouped by PM by default, shows a "last updated" strip, and drills into each project's stage-by-stage progress and S-curve.
+
+---
+
+## 10. Issues  *(raised in milestone 3; delays and richer handling in milestone 6)*
+
+An issue has a title, severity (Low, Medium, High, Critical), an optional activity, and moves OPEN → IN_PROGRESS → RESOLVED → CLOSED (and can be reopened). Engineers raise them from the daily report; PMs and the Owner change their status. Critical and High open issues appear in "needs attention".
+

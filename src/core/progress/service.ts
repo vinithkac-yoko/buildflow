@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { assertCan, redact } from "../auth/permissions";
 import { DAY_MS, addDays, dateKey, dayDiff, istToday } from "../dates";
 import { forbidden, notFound } from "../errors";
+import { formatDate } from "@/lib/format";
 import type { Ctx } from "../types";
 import {
   actualPct, buildSCurve, daysAheadBehind, plannedPct, scheduleBand, weightMethod, type CurvePoint, type PlanActivity, type ScheduleBand, type WeightMethod,
@@ -207,7 +208,7 @@ async function computePortfolio(ctx: Ctx, onlyProjectId?: string): Promise<Portf
       attention.push({
         ...base, kind: "MISSING_DPR", priority: 1,
         title: daysSince === null ? "No approved daily report yet" : `No approved daily report for ${daysSince} days`,
-        detail: `Last approved: ${lastDate ? dateKey(lastDate) : "never"}${eng ? ` · engineer ${eng.name}` : ""}`, href: `/progress?project=${p.id}`,
+        detail: `Last approved: ${lastDate ? formatDate(lastDate) : "never"}${eng ? ` · engineer ${eng.name}` : ""}`, href: `/progress?project=${p.id}`,
       });
     }
     for (const i of proj.filter((x) => x.severity === "CRITICAL" || x.severity === "HIGH")) {
@@ -250,39 +251,19 @@ export interface ProjectDetailProgress extends ProjectProgress {
   weightNote: string;
 }
 
-/** One project's progress with WBS-level bars and the S-curve (built from approved DPR history). */
-export async function projectDetailProgress(ctx: Ctx, projectId: string): Promise<ProjectDetailProgress> {
-  assertCan(ctx, "read", "project", projectId);
-  const today = istToday(ctx.now);
-  const project = await db.project.findUnique({ where: { id: projectId }, select: { id: true, baselineStart: true, baselineFinish: true } });
-  if (!project) throw notFound("That project");
+type ProgressLine = { activityId: string; quantity: unknown; dpr: { reportDate: Date } };
 
-  const [base] = (await computePortfolio(ctx, projectId)).projects;
-  if (!base) throw notFound("That project");
-
-  const [acts, wbsNodes, progress] = await Promise.all([
-    db.activity.findMany({ where: { projectId }, include: { wbsNode: { select: { code: true } } } }),
-    db.wbsNode.findMany({ where: { projectId, parentId: null }, orderBy: { seq: "asc" } }),
-    db.dprActivityProgress.findMany({
-      where: { projectId, dpr: { status: "APPROVED" } },
-      select: { activityId: true, quantity: true, dpr: { select: { reportDate: true } } },
-      orderBy: { dpr: { reportDate: "asc" } },
-    }),
-  ]);
-  const plan: (PlanActivity & { top: string })[] = acts.map((a) => ({
-    id: a.id, cost: num(a.plannedCost), mandays: num(a.plannedMandays), plannedQty: num(a.plannedQty), actualQty: num(a.actualQty),
-    start: a.plannedStart, finish: a.plannedFinish, top: a.wbsNode.code.split(".")[0],
-  }));
-
-  const wbs: WbsProgress[] = wbsNodes.map((n) => {
-    const mine = plan.filter((a) => a.top === n.code);
-    return { code: n.code, name: n.name, plannedPct: Math.round(plannedPct(mine, today) * 10) / 10, actualPct: Math.round(actualPct(mine) * 10) / 10, activities: mine.length };
-  });
-
+/** Cumulative planned vs actual % over the project's life. Actual stops at today; planned runs to the baseline finish. */
+function curveFor(
+  project: { baselineStart: Date; baselineFinish: Date },
+  plan: PlanActivity[],
+  lines: ProgressLine[],
+  today: Date,
+): CurvePoint[] {
   const cumulative = new Map<string, { date: Date; qty: number }[]>();
   const running = new Map<string, number>();
-  for (const r of progress) {
-    const q = (running.get(r.activityId) ?? 0) + num(r.quantity);
+  for (const r of [...lines].sort((a, b) => a.dpr.reportDate.getTime() - b.dpr.reportDate.getTime())) {
+    const q = (running.get(r.activityId) ?? 0) + num(r.quantity as number);
     running.set(r.activityId, q);
     const series = cumulative.get(r.activityId) ?? [];
     series.push({ date: r.dpr.reportDate, qty: q });
@@ -290,13 +271,63 @@ export async function projectDetailProgress(ctx: Ctx, projectId: string): Promis
   }
   const from = project.baselineStart <= today ? project.baselineStart : today;
   const to = project.baselineFinish > today ? project.baselineFinish : today;
-  const step = Math.max(3, Math.round(((to.getTime() - from.getTime()) / DAY_MS) / 60));
-  const curve = buildSCurve(plan, cumulative, from, to, step)
-    // Actual stops at today; planned continues to the baseline finish.
-    .map((pt) => (new Date(pt.date) > today ? { ...pt, actual: NaN } : pt));
+  const step = Math.max(3, Math.round((to.getTime() - from.getTime()) / DAY_MS / 60));
+  return buildSCurve(plan, cumulative, from, to, step).map((pt) => (new Date(pt.date) > today ? { ...pt, actual: null as unknown as number } : pt));
+}
 
+const toPlan = (acts: { id: string; plannedCost: unknown; plannedMandays: unknown; plannedQty: unknown; actualQty: unknown; plannedStart: Date; plannedFinish: Date }[]): PlanActivity[] =>
+  acts.map((a) => ({
+    id: a.id, cost: num(a.plannedCost as number), mandays: num(a.plannedMandays as number), plannedQty: num(a.plannedQty as number),
+    actualQty: num(a.actualQty as number), start: a.plannedStart, finish: a.plannedFinish,
+  }));
+
+/** S-curves for several projects at once (the portfolio's small multiples). Only projects the caller can see are returned. */
+export async function portfolioCurves(ctx: Ctx, projectIds: string[]): Promise<Map<string, CurvePoint[]>> {
+  assertCan(ctx, "read", "dashboard");
+  const ids = projectIds.filter((id) => ctx.allProjects || ctx.projectIds.includes(id));
+  const today = istToday(ctx.now);
+  const [projects, acts, lines] = await Promise.all([
+    db.project.findMany({ where: { id: { in: ids } }, select: { id: true, baselineStart: true, baselineFinish: true } }),
+    db.activity.findMany({ where: { projectId: { in: ids } }, select: { id: true, projectId: true, plannedCost: true, plannedMandays: true, plannedQty: true, actualQty: true, plannedStart: true, plannedFinish: true } }),
+    db.dprActivityProgress.findMany({
+      where: { projectId: { in: ids }, dpr: { status: "APPROVED" } },
+      select: { projectId: true, activityId: true, quantity: true, dpr: { select: { reportDate: true } } },
+    }),
+  ]);
+  const out = new Map<string, CurvePoint[]>();
+  for (const p of projects) {
+    const plan = toPlan(acts.filter((a) => a.projectId === p.id));
+    if (plan.length === 0) continue;
+    out.set(p.id, curveFor(p, plan, lines.filter((l) => l.projectId === p.id), today));
+  }
+  return out;
+}
+
+/** One project's progress with WBS-level bars and the S-curve (built from approved DPR history). */
+export async function projectDetailProgress(ctx: Ctx, projectId: string): Promise<ProjectDetailProgress> {
+  assertCan(ctx, "read", "project", projectId);
+  const today = istToday(ctx.now);
+  const project = await db.project.findUnique({ where: { id: projectId }, select: { id: true, baselineStart: true, baselineFinish: true } });
+  if (!project) throw notFound("That project");
+  const [base] = (await computePortfolio(ctx, projectId)).projects;
+  if (!base) throw notFound("That project");
+
+  const [acts, wbsNodes, lines] = await Promise.all([
+    db.activity.findMany({ where: { projectId }, include: { wbsNode: { select: { code: true } } } }),
+    db.wbsNode.findMany({ where: { projectId, parentId: null }, orderBy: { seq: "asc" } }),
+    db.dprActivityProgress.findMany({
+      where: { projectId, dpr: { status: "APPROVED" } },
+      select: { activityId: true, quantity: true, dpr: { select: { reportDate: true } } },
+    }),
+  ]);
+  const plan = toPlan(acts);
+  const top = new Map(acts.map((a) => [a.id, a.wbsNode.code.split(".")[0]]));
+  const wbs: WbsProgress[] = wbsNodes.map((n) => {
+    const mine = plan.filter((a) => top.get(a.id) === n.code);
+    return { code: n.code, name: n.name, plannedPct: Math.round(plannedPct(mine, today) * 10) / 10, actualPct: Math.round(actualPct(mine) * 10) / 10, activities: mine.length };
+  });
   return {
-    ...base, wbs, curve: curve.map((c) => ({ ...c, actual: Number.isNaN(c.actual) ? (null as unknown as number) : c.actual })),
+    ...base, wbs, curve: curveFor(project, plan, lines, today),
     weightNote: base.method === "cost" ? "Weighted by each activity's planned cost." : base.method === "mandays" ? "Weighted by planned mandays (cost is not available)." : "Every activity counts equally.",
   };
 }

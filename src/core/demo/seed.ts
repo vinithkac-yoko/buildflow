@@ -6,7 +6,7 @@ import { randomUUID } from "node:crypto";
 import { rm } from "node:fs/promises";
 import path from "node:path";
 import bcrypt from "bcryptjs";
-import { Prisma, type PrismaClient, type ProjectStatus, type Role, type ActivityStatus } from "@prisma/client";
+import { Prisma, type PrismaClient, type ProjectStatus, type Role } from "@prisma/client";
 import { DEMO_ACCOUNTS, DEMO_PASSWORD } from "../../lib/demo-accounts";
 import { ensureSequenceAtLeast } from "../common";
 import { istToday } from "../dates";

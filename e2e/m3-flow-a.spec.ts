@@ -38,8 +38,8 @@ test.describe("Flow A — daily report to approval", () => {
     await qty.nth(0).fill("999999");
     await expect(page.getByText(/left on AAC block masonry/)).toBeVisible();
     await expect(page.getByRole("button", { name: "SUBMIT DAILY REPORT" })).toBeDisabled();
-    await qty.nth(0).fill("5");
-    await qty.nth(1).fill("20");
+    await qty.nth(0).fill("40");
+    await qty.nth(1).fill("300");
 
     // Material with the available stock shown.
     await page.getByRole("button", { name: /Add material/ }).click();
@@ -77,6 +77,13 @@ test.describe("Flow A — daily report to approval", () => {
     const ctx2 = await browser.newContext({ ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } });
     const pm = await ctx2.newPage();
     await login(pm, "pm1@buildflow.demo");
+    const actualPct = async () => {
+      await pm.goto("/");
+      const card = pm.locator("article", { hasText: "RS Puram" });
+      await expect(card).toBeVisible();
+      return Number((await card.getByText(/Actual/).first().innerText()).match(/([\d.]+)%/)![1]);
+    };
+    const pctBefore = await actualPct(); // an unapproved report has not moved progress
     await pm.goto("/progress");
     await expect(pm.getByRole("link", { name: /RS Puram/ }).first()).toBeVisible();
     await pm.getByRole("link", { name: /RS Puram/ }).first().click();
@@ -90,6 +97,9 @@ test.describe("Flow A — daily report to approval", () => {
     // The report is approved and cannot be approved again.
     await pm.goto("/progress?status=APPROVED&project=" + projectUrl.split("/dpr/")[1]);
     await expect(pm.locator("main li").getByText("Approved", { exact: true }).first()).toBeVisible();
+
+    // Approval moved the project's actual % on the portfolio screen.
+    expect(await actualPct()).toBeGreaterThan(pctBefore);
 
     // Stock went down by exactly what was used.
     await pm.goto(`/materials?project=${projectUrl.split("/dpr/")[1]}`);

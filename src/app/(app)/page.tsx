@@ -3,15 +3,17 @@ import { redirect } from "next/navigation";
 import { FolderKanban, Info } from "lucide-react";
 import { listProjects } from "@/core/projects/service";
 import { Card } from "@/components/ui/card";
+import { PortfolioScreen } from "@/components/portfolio/portfolio-screen";
 import { requireSession } from "@/lib/auth";
 import { ROLE_LABEL } from "@/lib/format";
 
 export const metadata = { title: "Dashboard" };
 
-export default async function HomePage() {
+export default async function HomePage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { user, ctx } = await requireSession();
   if (user.role === "SITE_ENGINEER") redirect("/my-projects");
   if (user.role === "CLIENT") redirect("/projects");
+  if (user.role === "OWNER" || user.role === "PROJECT_MANAGER") return <PortfolioScreen searchParams={await searchParams} />;
 
   const canListProjects = user.role !== "MARKETING" && user.role !== "HR";
   const projects = canListProjects ? await listProjects(ctx) : [];
