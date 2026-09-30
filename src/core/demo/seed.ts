@@ -3,17 +3,22 @@
  * Used by `pnpm db:seed`, the first-deploy hook, and the Owner's "Reset demo data" button.
  */
 import { randomUUID } from "node:crypto";
+import { rm } from "node:fs/promises";
+import path from "node:path";
 import bcrypt from "bcryptjs";
 import { Prisma, type PrismaClient, type ProjectStatus, type Role, type ActivityStatus } from "@prisma/client";
 import { DEMO_ACCOUNTS, DEMO_PASSWORD } from "../../lib/demo-accounts";
 import { ensureSequenceAtLeast } from "../common";
+import { istToday } from "../dates";
+import { seedHistory, type HistoryAct } from "./history";
+import { solveFront } from "./solver";
 import {
   BOQ_EXTRAS, CHECKLISTS, COST_CODES, EMPLOYEES, EQUIPMENT, GANGS, MATERIALS, MATERIAL_CATEGORIES, SOPS,
   SUBCONTRACTORS, TEMPLATE, TRADES, UOMS, VENDORS,
 } from "./data";
 
 /** Bump when the demo data shape changes so deployed demos refresh themselves. */
-export const SEED_VERSION = 2;
+export const SEED_VERSION = 3;
 const META_KEY = "demoSeedVersion";
 
 type Tx = Prisma.TransactionClient;
@@ -22,10 +27,7 @@ const DAY = 86400000;
 const WEEK = 7 * DAY;
 const pad = (n: number, w = 4) => String(n).padStart(w, "0");
 
-function todayUtc(): Date {
-  const n = new Date();
-  return new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate()));
-}
+const todayUtc = () => istToday(new Date());
 const addDays = (d: Date, days: number) => new Date(d.getTime() + Math.round(days) * DAY);
 
 export interface ProjectSeed {
@@ -36,27 +38,35 @@ export interface ProjectSeed {
   pm: 1 | 2 | 3;
   engineer: number | null; // one Site Engineer per active project
   client: string;
-  startedWeeksAgo: number;
   durationWeeks: number;
   slipWeeks: number; // currentFinish - baselineFinish
-  stage: number; // work stage 0..1 on the template timeline (drives activity status now; DPR history in milestone 3)
+  /** Planned % complete today and actual % complete at the last approved report — chosen so each site tells a different story. */
+  plannedNow: number;
+  actualNow: number;
+  /** Days since the project's start when planned/actual are as above are solved from the template; planning projects start in the future. */
+  startsInWeeks?: number;
+  lastApprovedOffset: 0 | 1 | 2;
+  pendingToday?: boolean;
+  lowStock?: string;
   note: string;
 }
 
 export const PROJECTS: ProjectSeed[] = [
-  { name: "G+2 luxury villa, RS Puram", location: "RS Puram, Coimbatore", valueCr: 3.4, status: "ACTIVE", pm: 1, engineer: 1, client: "R. Sundaram", startedWeeksAgo: 26, durationWeeks: 58, slipWeeks: 0, stage: 0.45, note: "~45% complete" },
-  { name: "Duplex villa with basement, Avinashi Road", location: "Avinashi Road, Tiruppur", valueCr: 2.6, status: "ACTIVE", pm: 2, engineer: 2, client: "K. Palaniswamy", startedWeeksAgo: 14, durationWeeks: 60, slipWeeks: 8, stage: 0.2, note: "~20% complete, critical-path delay" },
-  { name: "Contemporary villa, Saravanampatti", location: "Saravanampatti, Coimbatore", valueCr: 2.9, status: "ACTIVE", pm: 3, engineer: 3, client: "S. Lakshmi Narayanan", startedWeeksAgo: 40, durationWeeks: 52, slipWeeks: -3, stage: 0.7, note: "~70% complete, finishing stage, ahead" },
-  { name: "Courtyard home, Race Course", location: "Race Course, Coimbatore", valueCr: 4.1, status: "ACTIVE", pm: 1, engineer: 4, client: "M. Vijayalakshmi", startedWeeksAgo: 30, durationWeeks: 60, slipWeeks: 0, stage: 0.55, note: "~55% complete, on track" },
-  { name: "G+1 villa, Peelamedu", location: "Peelamedu, Coimbatore", valueCr: 2.3, status: "ACTIVE", pm: 2, engineer: 5, client: "T. Arumugam", startedWeeksAgo: 22, durationWeeks: 56, slipWeeks: 2, stage: 0.35, note: "~35% complete, slightly behind" },
-  { name: "Luxury bungalow, Kumaran Nagar", location: "Kumaran Nagar, Tiruppur", valueCr: 3.0, status: "ACTIVE", pm: 1, engineer: 6, client: "P. Ganesan", startedWeeksAgo: 6, durationWeeks: 64, slipWeeks: 0, stage: 0.1, note: "~10% complete, foundation stage" },
-  { name: "Villa with pool, Vadavalli", location: "Vadavalli, Coimbatore", valueCr: 3.6, status: "ACTIVE", pm: 3, engineer: 7, client: "N. Rajeshwari", startedWeeksAgo: 46, durationWeeks: 54, slipWeeks: 0, stage: 0.85, note: "~85% complete, one open major NCR" },
-  { name: "Farmhouse residence, Pollachi", location: "Pollachi", valueCr: 2.2, status: "PLANNING", pm: 2, engineer: null, client: "V. Chinnasamy", startedWeeksAgo: -6, durationWeeks: 48, slipWeeks: 0, stage: 0, note: "planning" },
-  { name: "Heritage-style home, Erode", location: "Erode", valueCr: 2.5, status: "ON_HOLD", pm: 3, engineer: null, client: "A. Thiagarajan", startedWeeksAgo: 4, durationWeeks: 70, slipWeeks: 12, stage: 0.05, note: "on hold — client-side approval pending" },
+  { name: "G+2 luxury villa, RS Puram", location: "RS Puram, Coimbatore", valueCr: 3.4, status: "ACTIVE", pm: 1, engineer: 1, client: "R. Sundaram", durationWeeks: 58, slipWeeks: 0, plannedNow: 44, actualNow: 45, lastApprovedOffset: 1, note: "~45% complete, on track (no report yet today — the engineer demo)" },
+  { name: "Duplex villa with basement, Avinashi Road", location: "Avinashi Road, Tiruppur", valueCr: 2.6, status: "ACTIVE", pm: 2, engineer: 2, client: "K. Palaniswamy", durationWeeks: 60, slipWeeks: 8, plannedNow: 31, actualNow: 20, lastApprovedOffset: 2, note: "~20% complete, clearly behind on the critical path, no report yesterday" },
+  { name: "Contemporary villa, Saravanampatti", location: "Saravanampatti, Coimbatore", valueCr: 2.9, status: "ACTIVE", pm: 3, engineer: 3, client: "S. Lakshmi Narayanan", durationWeeks: 52, slipWeeks: -3, plannedNow: 62, actualNow: 70, lastApprovedOffset: 1, pendingToday: true, note: "~70% complete, finishing stage, ahead; today's report waits for approval" },
+  { name: "Courtyard home, Race Course", location: "Race Course, Coimbatore", valueCr: 4.1, status: "ACTIVE", pm: 1, engineer: 4, client: "M. Vijayalakshmi", durationWeeks: 60, slipWeeks: 0, plannedNow: 54, actualNow: 55, lastApprovedOffset: 0, note: "~55% complete, on track, today's report approved" },
+  { name: "G+1 villa, Peelamedu", location: "Peelamedu, Coimbatore", valueCr: 2.3, status: "ACTIVE", pm: 2, engineer: 5, client: "T. Arumugam", durationWeeks: 56, slipWeeks: 2, plannedNow: 40, actualNow: 35, lastApprovedOffset: 1, pendingToday: true, note: "~35% complete, slightly behind; today's report waits for approval" },
+  { name: "Luxury bungalow, Kumaran Nagar", location: "Kumaran Nagar, Tiruppur", valueCr: 3.0, status: "ACTIVE", pm: 1, engineer: 6, client: "P. Ganesan", durationWeeks: 64, slipWeeks: 0, plannedNow: 9, actualNow: 10, lastApprovedOffset: 1, note: "~10% complete, foundation stage" },
+  { name: "Villa with pool, Vadavalli", location: "Vadavalli, Coimbatore", valueCr: 3.6, status: "ACTIVE", pm: 3, engineer: 7, client: "N. Rajeshwari", durationWeeks: 54, slipWeeks: 0, plannedNow: 86, actualNow: 85, lastApprovedOffset: 0, lowStock: "Premium emulsion paint", note: "~85% complete, one open major NCR (milestone 5), paint stock low" },
+  { name: "Farmhouse residence, Pollachi", location: "Pollachi", valueCr: 2.2, status: "PLANNING", pm: 2, engineer: null, client: "V. Chinnasamy", durationWeeks: 48, slipWeeks: 0, plannedNow: 0, actualNow: 0, startsInWeeks: 6, lastApprovedOffset: 0, note: "planning" },
+  { name: "Heritage-style home, Erode", location: "Erode", valueCr: 2.5, status: "ON_HOLD", pm: 3, engineer: null, client: "A. Thiagarajan", durationWeeks: 70, slipWeeks: 12, plannedNow: 8, actualNow: 5, lastApprovedOffset: 2, note: "on hold — client-side approval pending" },
 ];
 
 /** Delete every record flagged isDemo, children first. */
 async function wipeDemo(tx: Tx) {
+  // The inventory ledger is append-only; only this transaction is allowed to delete demo rows (see invariants.sql).
+  await tx.$executeRaw`SELECT set_config('bf.allow_ledger_delete', 'on', true)`;
   const uIds = (await tx.user.findMany({ where: { isDemo: true }, select: { id: true } })).map((u) => u.id);
   const pIds = (await tx.project.findMany({ where: { isDemo: true }, select: { id: true } })).map((p) => p.id);
 
@@ -114,9 +124,11 @@ async function seedMasters(tx: Tx, ownerId: string) {
   await ensureSequenceAtLeast(tx, "VEN", n);
 
   n = 0;
+  const subByTrade = new Map<string, string>();
   for (const [name, t, contact] of SUBCONTRACTORS) {
     n += 1;
-    await tx.subcontractor.create({ data: { code: `SUB-${pad(n)}`, name, tradeId: trade.get(t)!, contact, ...by } });
+    const sub = await tx.subcontractor.create({ data: { code: `SUB-${pad(n)}`, name, tradeId: trade.get(t)!, contact, ...by } });
+    if (!subByTrade.has(t)) subByTrade.set(t, sub.id);
   }
   await ensureSequenceAtLeast(tx, "SUB", n);
 
@@ -157,13 +169,23 @@ async function seedMasters(tx: Tx, ownerId: string) {
   }
   await ensureSequenceAtLeast(tx, "SOP", n);
 
-  return { uom, trade, cc, material };
+  // Average daily wage per trade (employees and gangs), used to cost the demo labour history.
+  const wageByTradeId = new Map<string, number>();
+  const samples = new Map<string, number[]>();
+  for (const [, t, , wage] of EMPLOYEES) samples.set(t, [...(samples.get(t) ?? []), wage]);
+  for (const [, t, , , rate] of GANGS.map((g) => [g[0], g[1], g[2], g[2], g[3]] as const)) samples.set(t, [...(samples.get(t) ?? []), rate]);
+  for (const [t, v] of samples) wageByTradeId.set(trade.get(t)!, v.reduce((a, b) => a + b, 0) / v.length);
+
+  return { uom, trade, cc, material, subByTrade, wageByTradeId };
 }
 
-interface Refs { uom: Map<string, string>; trade: Map<string, string>; cc: Map<string, string>; material: Map<string, string> }
+interface Refs {
+  uom: Map<string, string>; trade: Map<string, string>; cc: Map<string, string>; material: Map<string, string>;
+  subByTrade: Map<string, string>; wageByTradeId: Map<string, number>;
+}
 
 /** Create WBS nodes, activities, BOQ, links, BOM and storage for one project. */
-async function seedProjectPlan(tx: Tx, refs: Refs, project: { id: string; contractValue: number; start: Date; finish: Date; stage: number; status: ProjectStatus }, ownerId: string) {
+async function seedProjectPlan(tx: Tx, refs: Refs, project: { id: string; contractValue: number; start: Date; finish: Date }, ownerId: string) {
   const by = { isDemo: true, createdById: ownerId };
   const scale = project.contractValue / 3e7;
   const budget = project.contractValue * 0.72;
@@ -204,6 +226,7 @@ async function seedProjectPlan(tx: Tx, refs: Refs, project: { id: string; contra
   const bomRows: Prisma.MaterialBomCreateManyInput[] = [];
   const actIds: string[] = [];
   const actByName = new Map<string, { id: string; qty: number; cost: number; uom: string }>();
+  const histActs: HistoryAct[] = [];
   TEMPLATE.forEach((r, i) => {
     const id = randomUUID();
     actIds.push(id);
@@ -212,19 +235,15 @@ async function seedProjectPlan(tx: Tx, refs: Refs, project: { id: string; contra
     const cost = Math.round((budget * r.share) / shareSum);
     const start = addDays(project.start, r.ph[0] * durDays + (i % 3));
     const finish = addDays(project.start, r.ph[1] * durDays);
-    let status: ActivityStatus = "NOT_STARTED";
-    if (project.status !== "PLANNING") {
-      if (r.ph[1] <= project.stage - 0.03) status = "COMPLETED";
-      else if (r.ph[0] <= project.stage) status = "IN_PROGRESS";
-    }
     actRows.push({
       id, code: `ACT-${pad(i + 1, 3)}`, projectId: project.id, wbsNodeId: leafIds[i], costCodeId: refs.cc.get(r.cc)!,
       tradeId: refs.trade.get(r.trade)!, uomId: refs.uom.get(r.uom)!, name: r.name, plannedQty: qty,
       plannedStart: start, plannedFinish: finish > start ? finish : addDays(start, 1),
       plannedMandays: Number((qty / r.prod).toFixed(2)), plannedCost: cost, targetProductivity: r.prod,
-      criticalPath: r.crit, status, ...by,
+      criticalPath: r.crit, status: "NOT_STARTED", ...by,
     });
     actByName.set(r.name, { id, qty, cost, uom: r.uom });
+    histActs.push({ id, row: r, plannedQty: qty, prod: r.prod });
     for (const [mat, coef, waste] of r.mats) {
       bomRows.push({ activityId: id, materialId: refs.material.get(mat)!, coefficient: coef, wastagePct: waste });
     }
@@ -275,14 +294,50 @@ async function seedProjectPlan(tx: Tx, refs: Refs, project: { id: string; contra
     })),
   });
 
+  const mainStoreId = randomUUID();
+  const yardId = randomUUID();
   await tx.storageLocation.createMany({
     data: [
-      { projectId: project.id, name: "Main Store", kind: "MAIN_STORE", ...by },
-      { projectId: project.id, name: "Yard", kind: "YARD", ...by },
+      { id: mainStoreId, projectId: project.id, name: "Main Store", kind: "MAIN_STORE", ...by },
+      { id: yardId, projectId: project.id, name: "Yard", kind: "YARD", ...by },
       { projectId: project.id, name: "Floor Store", kind: "FLOOR_STORE", ...by },
     ],
   });
-  return { boqRows };
+  return { boqRows, acts: histActs, bomRows, mainStoreId, yardId };
+}
+
+const ISSUES: Record<number, { title: string; severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"; status: "OPEN" | "IN_PROGRESS" | "RESOLVED"; ageDays: number; activity?: string }[]> = {
+  1: [
+    { title: "Rebar for first-floor slab arriving two days late", severity: "MEDIUM", status: "OPEN", ageDays: 2, activity: "Slab and beams – first floor" },
+    { title: "Site gate hinge broken", severity: "LOW", status: "RESOLVED", ageDays: 9 },
+  ],
+  2: [
+    { title: "Basement excavation flooded — dewatering pump needed", severity: "CRITICAL", status: "OPEN", ageDays: 3, activity: "Earthwork excavation for foundation" },
+    { title: "Shoring design approval pending from structural consultant", severity: "HIGH", status: "IN_PROGRESS", ageDays: 6 },
+  ],
+  3: [{ title: "Paint shade approval pending from client", severity: "LOW", status: "OPEN", ageDays: 4, activity: "Interior and exterior painting" }],
+  4: [{ title: "Marble batch shade variation between pallets", severity: "MEDIUM", status: "OPEN", ageDays: 1 }],
+  5: [{ title: "Electrician gang unavailable this week", severity: "HIGH", status: "OPEN", ageDays: 2, activity: "Conduit and wiring" }],
+  6: [{ title: "Boundary marking disputed by neighbour", severity: "MEDIUM", status: "IN_PROGRESS", ageDays: 5 }],
+  7: [
+    { title: "Pool corner waterproofing test showed seepage", severity: "HIGH", status: "OPEN", ageDays: 2, activity: "Terrace and wet-area waterproofing" },
+    { title: "Tile adhesive stock running low", severity: "LOW", status: "RESOLVED", ageDays: 12 },
+  ],
+};
+
+async function seedIssues(tx: Tx, a: { projectId: string; index: number; engineerId: string; acts: HistoryAct[]; today: Date }) {
+  for (const i of ISSUES[a.index] ?? []) {
+    const seq = await tx.codeSequence.upsert({ where: { key: "ISS" }, create: { key: "ISS", value: 1 }, update: { value: { increment: 1 } } });
+    const created = new Date(a.today.getTime() - i.ageDays * DAY + 5 * 3_600_000);
+    await tx.issue.create({
+      data: {
+        code: `ISS-${pad(seq.value)}`, projectId: a.projectId, title: i.title, severity: i.severity, status: i.status,
+        activityId: i.activity ? a.acts.find((x) => x.row.name === i.activity)?.id ?? null : null,
+        reportedById: a.engineerId, targetResolutionDate: new Date(created.getTime() + 7 * DAY), createdAt: created,
+        resolvedAt: i.status === "RESOLVED" ? new Date(created.getTime() + 2 * DAY) : null, isDemo: true,
+      },
+    });
+  }
 }
 
 async function seedAll(tx: Tx) {
@@ -296,6 +351,9 @@ async function seedAll(tx: Tx) {
   }
   const ownerId = userIds.get("owner@buildflow.demo")!;
   const refs = await seedMasters(tx, ownerId);
+  const materialInfo = new Map(
+    MATERIALS.map(([name, , , cost, thr]) => [refs.material.get(name)!, { id: refs.material.get(name)!, name, threshold: thr, unitCost: cost }] as const),
+  );
 
   let n = 0;
   for (const p of PROJECTS) {
@@ -304,7 +362,10 @@ async function seedAll(tx: Tx) {
     const client = await tx.client.create({
       data: { code: `CLI-${code}`, name: p.client, paymentTerms: "Milestone-linked (per contract)", isDemo: true, createdById: ownerId },
     });
-    const start = new Date(today.getTime() - p.startedWeeksAgo * WEEK);
+    // Solve the start date so that planned % today is exactly what this site's story needs.
+    const durDays = p.durationWeeks * 7;
+    const tFrac = p.startsInWeeks ? 0 : solveFront(TEMPLATE, p.plannedNow);
+    const start = p.startsInWeeks ? new Date(today.getTime() + p.startsInWeeks * WEEK) : new Date(today.getTime() - Math.round(tFrac * durDays) * DAY);
     const baselineFinish = new Date(start.getTime() + p.durationWeeks * WEEK);
     const contractValue = p.valueCr * 1e7;
     const project = await tx.project.create({
@@ -320,7 +381,27 @@ async function seedAll(tx: Tx) {
     }
     if (n === 1) await tx.user.update({ where: { email: "client@buildflow.demo" }, data: { clientId: client.id } });
 
-    const { boqRows } = await seedProjectPlan(tx, refs, { id: project.id, contractValue, start, finish: baselineFinish, stage: p.stage, status: p.status }, ownerId);
+    const { boqRows, acts, bomRows, mainStoreId, yardId } = await seedProjectPlan(tx, refs, { id: project.id, contractValue, start, finish: baselineFinish }, ownerId);
+
+    // Approved DPR history with labour, material issues and a consistent stock ledger.
+    if (p.plannedNow > 0 || p.actualNow > 0) {
+      const engineerId = userIds.get(`engineer${p.engineer ?? 1}@buildflow.demo`)!;
+      const result = await seedHistory(tx, {
+        projectId: project.id, projectIndex: n, start, today, now: new Date(), frontNow: solveFront(TEMPLATE, p.actualNow),
+        lastApprovedOffset: p.lastApprovedOffset, pendingToday: !!p.pendingToday, engineerId,
+        pmId: userIds.get(`pm${p.pm}@buildflow.demo`)!, acts,
+        bom: bomRows.map((b) => ({ activityId: b.activityId, materialId: b.materialId, coefficient: Number(b.coefficient), wastagePct: Number(b.wastagePct ?? 0) })),
+        materials: materialInfo, mainStoreId, yardId, tradeIds: refs.trade, subByTrade: refs.subByTrade, wageByTradeId: refs.wageByTradeId,
+        lowStockMaterial: p.lowStock, halted: p.status === "ON_HOLD",
+      });
+      for (const [activityId, f] of result.activityFinal) {
+        await tx.activity.update({
+          where: { id: activityId },
+          data: { actualQty: f.qty, actualMandays: f.mandays, actualStart: f.start, actualFinish: f.finish, status: f.status },
+        });
+      }
+      await seedIssues(tx, { projectId: project.id, index: n, engineerId, acts, today });
+    }
 
     // Vadavalli: an approved client variation → BOQ revision 2.
     if (p.name.includes("Vadavalli")) {
@@ -346,13 +427,18 @@ async function seedAll(tx: Tx) {
 
 /** Wipe and recreate all demo records atomically. */
 export async function resetDemo(client: PrismaClient) {
-  return client.$transaction(
+  // Uploaded demo photos live on disk; remember them so the files can go once the database change has committed.
+  const photos = await client.dprPhoto.findMany({ where: { isDemo: true }, select: { projectId: true, fileKey: true } });
+  const result = await client.$transaction(
     async (tx) => {
       await wipeDemo(tx);
       return seedAll(tx);
     },
-    { timeout: 120_000, maxWait: 20_000 },
+    { timeout: 180_000, maxWait: 20_000 },
   );
+  const root = path.resolve(process.env.UPLOAD_DIR ?? "./.uploads");
+  await Promise.all(photos.map((p) => rm(path.join(root, "dpr", p.projectId, p.fileKey), { force: true })));
+  return result;
 }
 
 /**

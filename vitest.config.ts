@@ -1,8 +1,19 @@
-import { defineConfig, loadEnv } from "vite";
-import type { UserConfig } from "vite";
+import { readFileSync } from "node:fs";
 import path from "node:path";
+import { defineConfig } from "vitest/config";
 
-export default defineConfig(({ mode }): UserConfig & { test: object } => ({
+// Vitest does not put .env values into process.env, so read TEST_DATABASE_URL ourselves.
+function testDatabaseUrl(): string {
+  if (process.env.TEST_DATABASE_URL) return process.env.TEST_DATABASE_URL;
+  try {
+    const line = readFileSync(path.resolve(__dirname, ".env"), "utf8").split("\n").find((l) => l.startsWith("TEST_DATABASE_URL="));
+    return line ? line.slice("TEST_DATABASE_URL=".length).replace(/^"|"$/g, "").trim() : "";
+  } catch {
+    return "";
+  }
+}
+
+export default defineConfig({
   resolve: { alias: { "@": path.resolve(__dirname, "src") } },
   test: {
     include: ["src/**/*.test.ts"],
@@ -11,7 +22,6 @@ export default defineConfig(({ mode }): UserConfig & { test: object } => ({
     // Integration tests share one database, so run test files one after another.
     fileParallelism: false,
     testTimeout: 30_000,
-    // Pick up TEST_DATABASE_URL from .env (Vitest does not put .env values in process.env by itself).
-    env: { TEST_DATABASE_URL: loadEnv(mode, process.cwd(), "").TEST_DATABASE_URL ?? "" },
+    env: { TEST_DATABASE_URL: testDatabaseUrl() },
   },
-}));
+});

@@ -40,3 +40,9 @@ export async function setPhotoVisibleAction(photoId: string, visible: boolean) {
   const { ctx } = await requireSession();
   return toResult(() => setPhotoClientVisible(ctx, photoId, visible), "photo");
 }
+
+export async function updateIssueStatusAction(issueId: string, to: "OPEN" | "IN_PROGRESS" | "RESOLVED" | "CLOSED") {
+  const { ctx } = await requireSession();
+  const { updateIssueStatus } = await import("@/core/issues/service");
+  return toResult(() => updateIssueStatus(ctx, issueId, to), "issue");
+}

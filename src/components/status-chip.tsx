@@ -1,5 +1,5 @@
-import type { ActivityStatus, ProjectStatus } from "@prisma/client";
-import { CheckCircle2, CirclePause, CircleDashed, CircleX, Clock, OctagonPause, PlayCircle, type LucideIcon } from "lucide-react";
+import type { ActivityStatus, DprStatus, ProjectStatus } from "@prisma/client";
+import { CheckCircle2, CirclePause, CircleDashed, CircleX, Clock, FilePen, OctagonPause, PlayCircle, RotateCcw, Send, type LucideIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 const PROJECT_STATUS: Record<ProjectStatus, { label: string; icon: LucideIcon; tone: "ok" | "warn" | "danger" | "slate" | "plan" }> = {
@@ -44,6 +44,26 @@ export function ActivityStatusChip({ status }: { status: ActivityStatus }) {
   return (
     <Badge tone={s.tone}>
       <Icon className="h-3.5 w-3.5" aria-hidden />
+      {s.label}
+    </Badge>
+  );
+}
+
+/** Today's report status as the site team sees it. `null` means no report has been started. */
+const DPR_STATUS: Record<DprStatus | "NONE", { label: string; icon: LucideIcon; tone: "ok" | "warn" | "danger" | "slate" | "plan" }> = {
+  NONE: { label: "Not started", icon: CircleDashed, tone: "slate" },
+  DRAFT: { label: "Draft saved", icon: FilePen, tone: "plan" },
+  SUBMITTED: { label: "Sent — waiting for PM", icon: Send, tone: "warn" },
+  APPROVED: { label: "Approved", icon: CheckCircle2, tone: "ok" },
+  REJECTED: { label: "Sent back — fix it", icon: RotateCcw, tone: "danger" },
+};
+
+export function DprStatusChip({ status, compact = false }: { status: DprStatus | null; compact?: boolean }) {
+  const s = DPR_STATUS[status ?? "NONE"];
+  const Icon = s.icon;
+  return (
+    <Badge tone={s.tone} className={compact ? "" : "px-3 py-1 text-sm"}>
+      <Icon className={compact ? "h-3.5 w-3.5" : "h-4 w-4"} aria-hidden />
       {s.label}
     </Badge>
   );

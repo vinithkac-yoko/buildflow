@@ -19,14 +19,15 @@ import { ROLE_LABEL, formatDate, formatInr } from "@/lib/format";
 import type { FieldDef } from "@/lib/forms";
 import { projectFormFields } from "../project-fields";
 
-const TILES: { label: string; icon: NavIcon; milestone: number; href?: string }[] = [
-  { label: "Planning", icon: "planning", milestone: 2, href: "planning" },
-  { label: "Daily Reports", icon: "dpr", milestone: 3 },
-  { label: "Labour", icon: "labour", milestone: 3 },
-  { label: "Materials", icon: "materials", milestone: 4 },
+interface Tile { label: string; icon: NavIcon; milestone: number; href?: (id: string, role: string) => string | null }
+const TILES: Tile[] = [
+  { label: "Planning", icon: "planning", milestone: 2, href: (id) => `/projects/${id}/planning` },
+  { label: "Daily Reports", icon: "dpr", milestone: 3, href: (id, role) => (role === "SITE_ENGINEER" ? `/dpr/${id}` : role === "OWNER" || role === "PROJECT_MANAGER" ? `/progress?project=${id}` : null) },
+  { label: "Labour", icon: "labour", milestone: 3, href: (_id, role) => (["OWNER", "PROJECT_MANAGER", "SITE_ENGINEER"].includes(role) ? "/labour" : null) },
+  { label: "Materials", icon: "materials", milestone: 4, href: (id) => `/materials?project=${id}` },
   { label: "Procurement", icon: "procurement", milestone: 4 },
   { label: "Quality", icon: "quality", milestone: 5 },
-  { label: "Equipment", icon: "issues", milestone: 6 },
+  { label: "Issues", icon: "issues", milestone: 6, href: (id) => `/issues?project=${id}` },
   { label: "Payments", icon: "payments", milestone: 4 },
   { label: "Documents", icon: "documents", milestone: 6 },
 ];
@@ -123,7 +124,9 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
         <h2 id="modules" className="mb-3 text-lg">Project modules</h2>
         <ul className="grid grid-cols-2 gap-3 md:grid-cols-3">
           {TILES.map((t) => {
-            const live = t.href && canPlan;
+            const target = t.href ? t.href(id, ctx.role) : null;
+            const allowed = t.label === "Planning" ? canPlan : t.label === "Materials" ? can(ctx, "read", "inventory", id) : t.label === "Issues" ? can(ctx, "read", "issue", id) : true;
+            const live = !!target && allowed;
             const body = (
               <>
                 <NavGlyph name={t.icon} className="h-6 w-6 text-planned" />
@@ -140,7 +143,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
             return (
               <li key={t.label}>
                 {live ? (
-                  <Link href={`/projects/${id}/${t.href}`} className="panel flex min-h-24 flex-col justify-between p-4 hover:bg-surface-2">{body}</Link>
+                  <Link href={target!} className="panel flex min-h-24 flex-col justify-between p-4 hover:bg-surface-2">{body}</Link>
                 ) : (
                   <div className="panel flex min-h-24 flex-col justify-between p-4 opacity-80" aria-disabled="true">{body}</div>
                 )}

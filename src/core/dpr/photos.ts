@@ -102,3 +102,23 @@ export async function locateDprPhoto(ctx: Ctx, photoId: string) {
   if (ctx.role === "CLIENT" && !(p.clientVisible && p.dpr.status === "APPROVED")) throw notFound("That photo");
   return { file: path.join(uploadRoot(), "dpr", p.projectId, p.fileKey), mime: p.mimeType, name: p.originalName };
 }
+
+/** Recent site photos in the caller's scope. The site team sees only today's; PMs and the Owner see the last 30 days. */
+export async function listPhotos(ctx: Ctx) {
+  assertCan(ctx, "read", "photo");
+  const today = new Date(Date.UTC(ctx.now.getUTCFullYear(), ctx.now.getUTCMonth(), ctx.now.getUTCDate()));
+  const rows = await db.dprPhoto.findMany({
+    where: {
+      ...(ctx.allProjects ? {} : { projectId: { in: [...ctx.projectIds] } }),
+      ...(ctx.role === "SITE_ENGINEER" ? { dpr: { reportDate: { gte: new Date(today.getTime() - 86_400_000) } } } : { createdAt: { gte: new Date(ctx.now.getTime() - 30 * 86_400_000) } }),
+      ...(ctx.role === "CLIENT" ? { clientVisible: true, dpr: { status: "APPROVED" as const } } : {}),
+    },
+    include: { dpr: { select: { reportDate: true, status: true, project: { select: { code: true, name: true } } } } },
+    orderBy: { createdAt: "desc" },
+    take: 60,
+  });
+  return rows.map((p) => ({
+    id: p.id, name: p.originalName, projectId: p.projectId, projectCode: p.dpr.project.code, projectName: p.dpr.project.name,
+    date: p.dpr.reportDate.toISOString().slice(0, 10), status: p.dpr.status, clientVisible: p.clientVisible,
+  }));
+}
